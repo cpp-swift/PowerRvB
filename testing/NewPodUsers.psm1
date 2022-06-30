@@ -24,7 +24,7 @@ function New-PodUsers {
         New-VIPermission -Role (Get-VIRole -Name $Role) -Entity (Get-VApp -Name $Pods[$i]) -Principal ('SDC\' + $Name)
     }
     
-    $users.GetEnumerator() | Select-Object -Property Name,Value | Export-Csv -NoTypeInformation -Path C:\$env:USERPROFILE\Desktop\Users.csv
+    $users.GetEnumerator() | Select-Object -Property Name,Value | Export-Csv -NoTypeInformation -Path $env:USERPROFILE\Desktop\Users.csv
 }
 
 function Get-RandomPassword {
