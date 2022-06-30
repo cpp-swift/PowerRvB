@@ -4,7 +4,10 @@ $target = ""
 
 # Get resource group ID
 
-# Get keys of 
+# Get source port group key
+# Get destination port group key
+
+# Get folder key
 
 
 
@@ -27,7 +30,7 @@ $spec.VmFolder.Type = 'Folder'
 $spec.VmFolder.Value = 'group-v4015' # key of the folder
 $spec.Location = New-Object VMware.Vim.ManagedObjectReference
 $spec.Location.Type = 'Datastore'
-$spec.Location.Value = 'datastore-1021' # key of the datastore???
+$spec.Location.Value = 'datastore-1021' # key of the datastore - will always be the same
 $spec.Provisioning = 'sameAsSource'
 $spec.ResourceSpec = New-Object VMware.Vim.ResourceConfigSpec
 $spec.ResourceSpec.MemoryAllocation = New-Object VMware.Vim.ResourceAllocationInfo
