@@ -75,3 +75,6 @@ $_this = Get-View -Id $VAppID # ID of Source vApp
 $_this.CloneVApp_Task($Name, $target, $spec)
 
 # rename VMs in vapp
+Get-VApp -Name "02-05_TestvAppClone" | Get-VM | ForEach-Object {
+    Get-VApp -Name "02-05_TestvAppClone" | Get-VM | Set-VM -Name "adf"
+}
