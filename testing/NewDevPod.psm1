@@ -15,6 +15,8 @@ function New-DevPod {
         [String] $WanPortGroup
     )
 
+    Import-Module NewPodPortGroups
+
     # Creates the Dev Port Group, vApp, and Router
     $DevPortGroup = New-PodPortGroups -Portgroups 1 -StartPort 1300 -EndPort 1350
     New-VApp -Location $Target -Name $Name

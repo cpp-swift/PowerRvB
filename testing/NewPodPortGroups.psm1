@@ -1,5 +1,5 @@
 <#
-Creates a specified amount of port groups using the lowest available numbers
+Creates a specified number of port groups using the lowest available numbers
 Author: Evan Deters
 #>
 
