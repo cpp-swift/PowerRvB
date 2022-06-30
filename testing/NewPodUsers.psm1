@@ -1,5 +1,5 @@
 <#
-Creates users for pods
+Creates users for pods, assigns the desired role to the user's corresponding pod, outputs a CSV of account names and credentials
 Author: Evan Deters
 #>
 
@@ -12,6 +12,7 @@ function New-PodUsers {
         [String] $Role
     )
 
+    # Creating the User Accounts
     Import-Module ActiveDirectory
     $users = @{}
     for($i = 0; $i -lt $Pods.Length; $i++) {
@@ -21,12 +22,15 @@ function New-PodUsers {
         $Password = ConvertTo-SecureString -AsPlainText $Password -Force
         New-ADUser -Name $Name -ChangePasswordAtLogon $false -AccountPassword $Password -Enabled $true
         
+        # Creating the Roles Assignments on vSphere
         New-VIPermission -Role (Get-VIRole -Name $Role) -Entity (Get-VApp -Name $Pods[$i]) -Principal ('SDC\' + $Name)
     }
     
+    # Outputting the User CSV to Desktop
     $users.GetEnumerator() | Select-Object -Property Name,Value | Export-Csv -NoTypeInformation -Path $env:USERPROFILE\Desktop\Users.csv
 }
 
+# Password generation function
 function Get-RandomPassword {
     param (
         [Parameter(Mandatory)]

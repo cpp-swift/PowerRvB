@@ -15,6 +15,7 @@ function New-DevPod {
         [String] $WanPortGroup
     )
 
+    # Gets the list of existing port groups in the 1300-1400 range
     $PortGroupList = Get-VDPortgroup -VDSwitch Main_DSW | Select-Object -ExpandProperty name | Sort-Object
     $PortGroupList = $PortGroupList | 
         ForEach-Object {
@@ -22,6 +23,7 @@ function New-DevPod {
         }
     $PortGroupList = $PortGroupList.where{$_ -IN 1300..1399}
 
+    # Selects the first available port group
     for($i = 1300; $i -lt 1400; $i++) {
         if($PortGroupList.length -eq 0) {
             $DevPortGroup = $i
@@ -32,6 +34,7 @@ function New-DevPod {
     }
 }
 
+    # Creates the Dev Port Group, vApp, and Router
     New-VDPortgroup -VDSwitch Main_DSW -Name $DevPortGroup'_DevPod' -VlanId $DevPortGroup
     New-VApp -Location $Target -Name $Name
     if($CreateRouter -eq $true) {
@@ -39,6 +42,7 @@ function New-DevPod {
     }
 }
 
+# Creates a pfSense Router for the vApp 
 function New-PodRouter {
 
     param (
@@ -50,11 +54,13 @@ function New-PodRouter {
         [int] $LanPortGroup
     )
 
+    # Creating the Router
     New-VM -Name $LanPortGroup'_PodRouter' `
      -ResourcePool (Get-VApp -Name $Target) `
      -Datastore (Get-DataStore -Name Ursula) `
      -Template (Get-Template -Name "pfSense Template")
 
+    # Assigning port groups to the interfaces
     Get-VM -Name $LanPortGroup'_PodRouter' | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $WanPortGroup) -Confirm:$false
     Get-VM -Name $LanPortGroup'_PodRouter' | Get-NetworkAdapter -Name "Network adapter 2" | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $LanPortGroup'_DevPod') -Confirm:$false
 } 
