@@ -15,10 +15,12 @@ function New-PodUsers {
     $users = @{}
     Import-Module ActiveDirectory
     for($i = 0; $i -lt $Pods.Length; $i++) {
-        $Password = ConvertTo-SecureString -AsPlainText (Get-RandomPassword 8) -Force
+        $Password = Get-RandomPassword 12
         $Name = $Pods[$i] + '_User'
-        New-ADUser -Name $Name -ChangePasswordAtLogon $false -AccountPassword $Password
         $users.Add($Name, $Password)
+        $Password = ConvertTo-SecureString -AsPlainText $Password -Force
+        New-ADUser -Name $Name -ChangePasswordAtLogon $false -AccountPassword $Password
+        
         New-VIPermission -Role (Get-VIRole -Name $Role) -Entity (Get-VApp -Name $Pods[$i]) -Principal ('SDC\' + $Name)
     }
     
