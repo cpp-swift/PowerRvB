@@ -15,30 +15,11 @@ function New-DevPod {
         [String] $WanPortGroup
     )
 
-    # Gets the list of existing port groups in the 1300-1400 range
-    $PortGroupList = Get-VDPortgroup -VDSwitch Main_DSW | Select-Object -ExpandProperty name | Sort-Object
-    $PortGroupList = $PortGroupList | 
-        ForEach-Object {
-            [int]$PortGroupList[$PortGroupList.indexOf($_)].Substring(0, $PortGroupList[$PortGroupList.indexOf($_)].indexOf('_'))
-        }
-    $PortGroupList = $PortGroupList.where{$_ -IN 1300..1399}
-
-    # Selects the first available port group
-    for($i = 1300; $i -lt 1400; $i++) {
-        if($PortGroupList.length -eq 0) {
-            $DevPortGroup = $i
-            break
-        } elseif($PortGroupList.IndexOf($i) -eq -1) {
-            $DevPortGroup = $i
-            break
-    }
-}
-
     # Creates the Dev Port Group, vApp, and Router
-    New-VDPortgroup -VDSwitch Main_DSW -Name $DevPortGroup'_DevPod' -VlanId $DevPortGroup
+    $DevPortGroup = New-PodPortGroups -Portgroups 1 -StartPort 1300 -EndPort 1350
     New-VApp -Location $Target -Name $Name
     if($CreateRouter -eq $true) {
-        New-PodRouter -Target $Name -WanPortGroup $WanPortGroup -LanPortGroup $DevPortGroup
+        New-PodRouter -Target $Name -WanPortGroup $WanPortGroup -LanPortGroup $DevPortGroup[1].name
     }
 }
 
@@ -51,7 +32,7 @@ function New-PodRouter {
         [Parameter(Mandatory=$true)]
         [String] $WanPortGroup,
         [Parameter(Mandatory=$true)]
-        [int] $LanPortGroup
+        [String] $LanPortGroup
     )
 
     # Creating the Router
@@ -62,5 +43,5 @@ function New-PodRouter {
 
     # Assigning port groups to the interfaces
     Get-VM -Name $LanPortGroup'_PodRouter' | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $WanPortGroup) -Confirm:$false
-    Get-VM -Name $LanPortGroup'_PodRouter' | Get-NetworkAdapter -Name "Network adapter 2" | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $LanPortGroup'_DevPod') -Confirm:$false
+    Get-VM -Name $LanPortGroup'_PodRouter' | Get-NetworkAdapter -Name "Network adapter 2" | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $LanPortGroup) -Confirm:$false
 } 

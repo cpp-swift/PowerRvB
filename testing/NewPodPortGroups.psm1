@@ -10,10 +10,10 @@ function New-PodPortGroups {
         [Parameter(Mandatory=$true)]
         [int] $Portgroups,
         [Parameter(Mandatory=$true)]
-        [ValidateRange(1000,1299)]
+        [ValidateRange(1000,1350)]
         [int] $StartPort,
         [Parameter(Mandatory=$true)]
-        [ValidateRange(1001,1300)]
+        [ValidateRange(1000,1350)]
         [int] $EndPort
     )
 
@@ -36,14 +36,17 @@ function New-PodPortGroups {
     # Creates the port groups
     $j = $StartPort
     $i = 0
-    While ($i -lt $Portgroups - 1) {
+    [int[]]$CreatedPortGroups
+    While ($i -le $Portgroups - 1) {
         if($PortGroupList.IndexOf($j) -ne -1) { $j++; continue }
         if($j -gt $EndPort) { Write-Error -Message "There are no more available port groups in the specified range."}
         else {
             $PodPortGroup = $j
             New-VDPortgroup -VDSwitch Main_DSW -Name $PodPortGroup'_PodNetwork' -VlanId $PodPortGroup
+            $CreatedPortGroups += $j
             $j++
             $i++
         }
     }
+    return $CreatedPortGroups -as [string[]]
 }
