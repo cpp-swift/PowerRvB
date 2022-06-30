@@ -15,7 +15,7 @@ function New-DevPod {
         [String] $WanPortGroup
     )
 
-    $PortGroupList = Get-VDPortgroup -VDSwitch Main_DSW | Select -ExpandProperty name | sort
+    $PortGroupList = Get-VDPortgroup -VDSwitch Main_DSW | Select-Object -ExpandProperty name | Sort-Object
     $PortGroupList = $PortGroupList | 
         ForEach-Object {
             [int]$PortGroupList[$PortGroupList.indexOf($_)].Substring(0, $PortGroupList[$PortGroupList.indexOf($_)].indexOf('_'))
