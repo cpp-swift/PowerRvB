@@ -12,19 +12,19 @@ function New-PodUsers {
         [String] $Role
     )
 
-    $users = @{}
     Import-Module ActiveDirectory
+    $users = @{}
     for($i = 0; $i -lt $Pods.Length; $i++) {
         $Password = Get-RandomPassword 12 1 1 1 1
         $Name = $Pods[$i] + '_User'
         $users.Add($Name, $Password)
         $Password = ConvertTo-SecureString -AsPlainText $Password -Force
-        New-ADUser -Name $Name -ChangePasswordAtLogon $false -AccountPassword $Password
+        New-ADUser -Name $Name -ChangePasswordAtLogon $false -AccountPassword $Password -Enabled $true
         
         New-VIPermission -Role (Get-VIRole -Name $Role) -Entity (Get-VApp -Name $Pods[$i]) -Principal ('SDC\' + $Name)
     }
     
-    $users
+    $users.GetEnumerator() | Select-Object -Property Name,Value | Export-Csv -NoTypeInformation -Path C:\$env:USERPROFILE\Desktop\Users.csv
 }
 
 function Get-RandomPassword {
