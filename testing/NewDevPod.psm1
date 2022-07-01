@@ -12,16 +12,24 @@ function New-DevPod {
         [Parameter(Mandatory=$true)]
         [String] $Target,
         [Boolean] $CreateRouter,
-        [String] $WanPortGroup
+        [String] $WanPortGroup,
+        [String[]] $Boxes
     )
-
-    Import-Module NewPodPortGroups
 
     # Creates the Dev Port Group, vApp, and Router
     $DevPortGroup = New-PodPortGroups -Portgroups 1 -StartPort 1300 -EndPort 1350
     New-VApp -Location $Target -Name $Name
     if($CreateRouter -eq $true) {
         New-PodRouter -Target $Name -WanPortGroup $WanPortGroup -LanPortGroup $DevPortGroup[1].name
+    }
+    if($Boxes.Count -ne 0) {
+        for ($i = 0; $i -lt $Boxes.Count; $i++) {
+            New-VM -Name $Boxes[$i] `
+             -ResourcePool (Get-VApp -Name $Name) `
+             -Datastore (Get-DataStore -Name Ursula) `
+             -Template (Get-Template -Name $Boxes[$i])
+            Get-VM -Name $Boxes[$i] | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $DevPortGroup[1].name) -Confirm:$false
+        }
     }
 }
 
@@ -41,7 +49,7 @@ function New-PodRouter {
     New-VM -Name $LanPortGroup'_PodRouter' `
      -ResourcePool (Get-VApp -Name $Target) `
      -Datastore (Get-DataStore -Name Ursula) `
-     -Template (Get-Template -Name "pfSense Template")
+     -Template (Get-Template -Name "pfSenseBlank")
 
     # Assigning port groups to the interfaces
     Get-VM -Name $LanPortGroup'_PodRouter' | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $WanPortGroup) -Confirm:$false
