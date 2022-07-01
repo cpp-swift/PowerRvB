@@ -28,15 +28,17 @@ function Invoke-PodClone {
             New-PodRouter -Target (-join ($CreatedPortGroups[$i + 1].name.Substring(0,5), 'Pod')) -WanPortGroup 0010_DefaultNetwork -LanPortGroup $CreatedPortGroups[$i + 1].name
         }
     }
-    
-    if ($CreateUsers -eq $true) {
-        New-PodUsers -Pods $Pods.Name -Role $Role
-    }
 
     for($i = 0; $i -lt $Pods; $i++) {
         Get-VApp -Name (-join ($CreatedPortGroups[$i + 1].name.Substring(0,5), 'Pod')) | Get-VM | Where-Object -Property Name -NotLike '*PodRouter*' | 
             Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup $CreatedPortGroups[$i + 1] -Confirm:$false -RunAsync
     }
+    if ($CreateUsers -eq $true) {
+        foreach ($name in $CreatedPortGroups.Name) {   
+            $names += $name.Substring(0, 8)
+        }
+        New-PodUsers -Pods $names -Role $Role
+    }   
 
 }
 
