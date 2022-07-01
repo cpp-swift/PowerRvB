@@ -112,7 +112,7 @@ function New-DevPod {
              -ResourcePool (Get-VApp -Name $Name) `
              -Datastore (Get-DataStore -Name Ursula) `
              -Template (Get-Template -Name $Boxes[$i])
-            Get-VM -Name $Boxes[$i] | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup $DevPortGroup[1] -Confirm:$false
+            Get-VM -Name $Boxes[$i] | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup $DevPortGroup[1] -Confirm:$false -RunAsync
         }
     }
 }
@@ -184,8 +184,8 @@ function New-PodRouter {
      -Template (Get-Template -Name "pfSenseBlank")
 
     # Assigning port groups to the interfaces
-    Get-VM -Name $LanPortGroup'_PodRouter' | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $WanPortGroup) -Confirm:$false
-    Get-VM -Name $LanPortGroup'_PodRouter' | Get-NetworkAdapter -Name "Network adapter 2" | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $LanPortGroup) -Confirm:$false
+    Get-VM -Name $LanPortGroup'_PodRouter' | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $WanPortGroup) -Confirm:$false -RunAsync
+    Get-VM -Name $LanPortGroup'_PodRouter' | Get-NetworkAdapter -Name "Network adapter 2" | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $LanPortGroup) -Confirm:$false -RunAsync
 } 
 
 function New-PodUsers {
