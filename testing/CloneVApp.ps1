@@ -1,2 +1,12 @@
-$myVApp = Get-CIVapp -Name "02-05_TestvApp"
-New-CIVApp -Name "02-05_TestVAppClone" -Description "my cloned vapp" -VApp
+function Clone-VApp {
+    param(
+        [String] $vApp,
+        [String] $Target,
+        [int] $Pods,
+        [String] $Tag,
+        [Boolean] $CreateUsers,
+        [String] $Role,
+        [Boolean] $CreateRoutes
+
+    )
+}
