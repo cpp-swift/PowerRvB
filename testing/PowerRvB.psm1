@@ -104,25 +104,35 @@ function New-DevPod {
         [Parameter(Mandatory=$true)]
         [String] $Target,
         [Boolean] $CreateRouter,
-        [String] $WanPortGroup,
-        [String[]] $Boxes
+        [String] $WanPortGroup
     )
 
     # Creates the Dev Port Group, vApp, and Router
     $DevPortGroup = New-PodPortGroups -Portgroups 1 -StartPort 1300 -EndPort 1350
     New-VApp -Location $Target -Name $Name
     if($CreateRouter -eq $true) {
-        New-PodRouter -Target $Name -WanPortGroup $WanPortGroup -LanPortGroup $DevPortGroup[1].name
+        New-PodRouter -Target $Name -WanPortGroup $WanPortGroup -LanPortGroup (-join ($DevPortGroup[0], '_PodNetwork'))
     }
-    if($Boxes.Count -ne 0) {
+
+    $Templates = Get-Template
+
+    foreach ($template in $Templates) {
+        Write-Host $Templates.IndexOf($template)'-' "$template" `n
+    }
+
+    $boxes = (Read-Host "Enter the boxes to be created in this Developer Pod (Ex: 0, 2, 1). Press enter to continue").split(',')
+    $boxes = $boxes | %{$_ -Replace '\s',''}
+
+    if($Boxes) {
         for ($i = 0; $i -lt $Boxes.Count; $i++) {
-            New-VM -Name $Boxes[$i] `
+            New-VM -Name $Templates.Get($Boxes[$i]).Name `
              -ResourcePool (Get-VApp -Name $Name) `
              -Datastore (Get-DataStore -Name Ursula) `
-             -Template (Get-Template -Name $Boxes[$i])
-            Get-VM -Name $Boxes[$i] | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup $DevPortGroup[1] -Confirm:$false -RunAsync
+             -Template $Templates.get($Boxes[$i])
+            Get-VM -Name $Templates.Get($Boxes[$i]).Name | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortGroup -Name (-join ($DevPortGroup[0], '_PodNetwork'))) -Confirm:$false -RunAsync
         }
     }
+    
 }
 
 function New-PodPortGroups {
@@ -164,7 +174,9 @@ function New-PodPortGroups {
         if($j -gt $EndPort) { Write-Error -Message "There are no more available port groups in the specified range."}
         else {
             New-VDPortgroup -VDSwitch Main_DSW -Name (-join ($j, '_PodNetwork')) -VlanId $j | Out-Null
-            Get-VDPortGroup -Name (-join ($j, '_PodNetwork')) | New-TagAssignment -Tag (Get-Tag -Name $Tag) | Out-Null
+            if($Tag) {
+                Get-VDPortGroup -Name (-join ($j, '_PodNetwork')) | New-TagAssignment -Tag (Get-Tag -Name $Tag) | Out-Null
+            }
             $j
             $j++
             $i++
@@ -189,11 +201,11 @@ function New-PodRouter {
     New-VM -Name (-join ($LanPortGroup.Substring(0,4), '_PodRouter')) `
      -ResourcePool (Get-VApp -Name $Target) `
      -Datastore (Get-DataStore -Name Ursula) `
-     -Template (Get-Template -Name "pfSenseBlank")
+     -Template (Get-Template -Name "pfSense Blank")
 
     # Assigning port groups to the interfaces
-    Get-VM -Name $LanPortGroup'_PodRouter' | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $WanPortGroup) -Confirm:$false -RunAsync
-    Get-VM -Name $LanPortGroup'_PodRouter' | Get-NetworkAdapter -Name "Network adapter 2" | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $LanPortGroup) -Confirm:$false -RunAsync
+    Get-VM -Name (-join ($LanPortGroup.Substring(0,4), '_PodRouter')) | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $WanPortGroup) -Confirm:$false -RunAsync
+    Get-VM -Name (-join ($LanPortGroup.Substring(0,4), '_PodRouter')) | Get-NetworkAdapter -Name "Network adapter 2" | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $LanPortGroup) -Confirm:$false -RunAsync
 } 
 
 function New-PodUsers {
@@ -238,3 +250,4 @@ function Invoke-RvByeBye {
     Get-Tag -Name $Tag | Remove-Tag
     Get-TagCategory -Name $Tag | Remove-TagCategory
 }
+
