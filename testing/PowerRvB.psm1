@@ -239,5 +239,5 @@ function Invoke-RvByeBye {
     Get-VDPortgroup -Tag $Tag | Remove-VDPortGroup
     Get-ADUser -Filter {Description -eq $Tag} | Remove-ADUser
     Get-Tag -Name $Tag | Remove-Tag
-    Get-TagCategory -Name $Tag | Remove-Tag
+    Get-TagCategory -Name $Tag | Remove-TagCategory
 }
