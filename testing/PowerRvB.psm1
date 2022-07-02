@@ -6,12 +6,16 @@ function Invoke-PodClone {
         [String] $Target,
         [Parameter(Mandatory)]
         [int] $Pods,
+        [Parameter(Mandatory)]
         [String] $Tag,
         [Boolean] $CreateUsers,
         [String] $Role,
         [Boolean] $CreateRouters,
         [int] $FirstPortGroup
     )
+
+    $vappCategory = New-TagCategory -Name $Tag -Description $tag -EntityType VApp
+    $vappTag = New-Tag -Name $Tag -Category $vappCategory 
 
     if ($FirstPortGroup -ne $null) { $CreatedPortGroups = New-PodPortGroups -Portgroups $Pods -StartPort $FirstPortGroup -EndPort ($FirstPortGroup + $Pods + 20) } 
     else { $CreatedPortGroups = New-PodPortGroups -Portgroups $Pods -StartPort 1200 -EndPort 1299 }
@@ -30,9 +34,11 @@ function Invoke-PodClone {
     }
 
     for($i = 0; $i -lt $Pods; $i++) {
+        Get-VApp -Name (-join ($CreatedPortGroups[$i + 1].name.Substring(0,5), 'Pod')) | New-TagAssignment -Tag (Get-Tag -Name $Tag)
         Get-VApp -Name (-join ($CreatedPortGroups[$i + 1].name.Substring(0,5), 'Pod')) | Get-VM | Where-Object -Property Name -NotLike '*PodRouter*' | 
             Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup $CreatedPortGroups[$i + 1] -Confirm:$false -RunAsync
     }
+
     if ($CreateUsers -eq $true) {
         foreach ($name in $CreatedPortGroups.Name) {   
             $names += $name.Substring(0, 8)
@@ -213,4 +219,15 @@ function New-PodUsers {
     
     # Outputting the User CSV to Desktop
     $users.GetEnumerator() | Select-Object -Property Name,Value | Export-Csv -NoTypeInformation -Path $env:USERPROFILE\Desktop\Users.csv
+}
+
+function Invoke-RvByeBye {
+    
+    param(
+        [Parameter(Mandatory)]
+        [String] $Tag
+    )
+
+    Get-VApp | Where-Object -Property Tag -EQ $Tag
+
 }
