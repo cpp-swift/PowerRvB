@@ -14,11 +14,13 @@ function Invoke-PodClone {
         [int] $FirstPortGroup
     )
 
-    $vappCategory = New-TagCategory -Name $Tag -Description $tag -EntityType VApp
-    $vappTag = New-Tag -Name $Tag -Category $vappCategory 
+    New-TagCategory -Name $Tag -Description $tag -EntityType VApp,DistributedPortGroup,VM
+    $vappCategory = Get-TagCategory -Name $Tag
+    New-Tag -Name $Tag -Category $vappCategory 
+    $vappTag = Get-Tag -Name $Tag
 
-    if ($FirstPortGroup -ne $null) { $CreatedPortGroups = New-PodPortGroups -Portgroups $Pods -StartPort $FirstPortGroup -EndPort ($FirstPortGroup + $Pods + 20) } 
-    else { $CreatedPortGroups = New-PodPortGroups -Portgroups $Pods -StartPort 1200 -EndPort 1299 }
+    if ($FirstPortGroup -ne $null) { $CreatedPortGroups = New-PodPortGroups -Portgroups $Pods -StartPort $FirstPortGroup -EndPort ($FirstPortGroup + $Pods + 20) -Tag $vappTag } 
+    else { $CreatedPortGroups = New-PodPortGroups -Portgroups $Pods -StartPort 1200 -EndPort 1299 -Tag $vappTag}
 
     for($i = 0; $i -lt $Pods; $i++) {
             New-VApp -Name (-join ($CreatedPortGroups[$i + 1].name.Substring(0,5), 'Pod')) -Location (Get-ResourcePool -Name $Target) -ContentLibraryItem (Get-ContentLibraryItem -ContentLibrary Templates -Name $Template) -RunAsync
@@ -34,23 +36,18 @@ function Invoke-PodClone {
     }
 
     for($i = 0; $i -lt $Pods; $i++) {
-        Get-VApp -Name (-join ($CreatedPortGroups[$i + 1].name.Substring(0,5), 'Pod')) | New-TagAssignment -Tag (Get-Tag -Name $Tag)
+        Get-VApp -Name (-join ($CreatedPortGroups[$i + 1].name.Substring(0,5), 'Pod')) | New-TagAssignment -Tag $vappTag
         Get-VApp -Name (-join ($CreatedPortGroups[$i + 1].name.Substring(0,5), 'Pod')) | Get-VM | Where-Object -Property Name -NotLike '*PodRouter*' | 
             Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup $CreatedPortGroups[$i + 1] -Confirm:$false -RunAsync
     }
-<<<<<<< HEAD
-
-=======
     
     $names = @()
->>>>>>> a9ec2ec4d6d5d7313b10ec0bbfc1d00c28b5e550
     if ($CreateUsers -eq $true) {
         foreach ($name in $CreatedPortGroups.Name) {   
             $names += $name.Substring(0, 8)
         }
-        New-PodUsers -Pods $names -Role $Role
+        New-PodUsers -Pods $names -Role $Role -Description $Tag
     }   
-
 }
 
 # Password generation function
@@ -139,7 +136,9 @@ function New-PodPortGroups {
         [int] $StartPort,
         [Parameter(Mandatory=$true)]
         [ValidateRange(1000,1350)]
-        [int] $EndPort
+        [int] $EndPort,
+        [Object] $Tag
+
     )
 
     $ErrorActionPreference = "Stop"
@@ -168,6 +167,7 @@ function New-PodPortGroups {
         else {
             $PodPortGroup = $j
             New-VDPortgroup -VDSwitch Main_DSW -Name $PodPortGroup'_PodNetwork' -VlanId $PodPortGroup
+            Get-VDPortGroup -Name $PodPortGroup'_PodNetwork' | New-TagAssignment -Tag $Tag
             $CreatedPortGroups += $j
             $j++
             $i++
@@ -205,7 +205,9 @@ function New-PodUsers {
         [Parameter(Mandatory=$true)]
         [String[]] $Pods,
         [Parameter(Mandatory=$true)]
-        [String] $Role
+        [String] $Role,
+        [Parameter(Mandatory=$true)]
+        [String] $Description
     )
 
     # Creating the User Accounts
@@ -216,7 +218,7 @@ function New-PodUsers {
         $Name = $Pods[$i] + '_User'
         $users.Add($Name, $Password)
         $Password = ConvertTo-SecureString -AsPlainText $Password -Force
-        New-ADUser -Name $Name -ChangePasswordAtLogon $false -AccountPassword $Password -Enabled $true
+        New-ADUser -Name $Name -ChangePasswordAtLogon $false -AccountPassword $Password -Enabled $true -Description $Description
         
         # Creating the Roles Assignments on vSphere
         New-VIPermission -Role (Get-VIRole -Name $Role) -Entity (Get-VApp -Name $Pods[$i]) -Principal ('SDC\' + $Name)
@@ -233,6 +235,9 @@ function Invoke-RvByeBye {
         [String] $Tag
     )
 
-    Get-VApp | Where-Object -Property Tag -EQ $Tag
-
+    Get-VApp -Tag $Tag | Remove-VApp
+    Get-VDPortgroup -Tag $Tag | Remove-VDPortGroup
+    Get-ADUser -Filter {Description -eq $Tag} | Remove-ADUser
+    Get-Tag -Name $Tag | Remove-Tag
+    Get-TagCategory -Name $Tag | Remove-Tag
 }
