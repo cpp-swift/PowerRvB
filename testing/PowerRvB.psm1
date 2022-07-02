@@ -114,7 +114,7 @@ function New-DevPod {
         New-PodRouter -Target $Name -WanPortGroup $WanPortGroup -LanPortGroup (-join ($DevPortGroup[0], '_PodNetwork'))
     }
 
-    $Templates = Get-Template
+    $Templates = Get-Template | sort
 
     foreach ($template in $Templates) {
         Write-Host $Templates.IndexOf($template)'-' "$template" `n
@@ -182,7 +182,7 @@ function New-PodPortGroups {
             $i++
         }
     }
-    return $haha
+    return $CreatedPortGroups
 }
 
 # Creates a pfSense Router for the vApp 
