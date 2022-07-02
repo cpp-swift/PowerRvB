@@ -38,7 +38,12 @@ function Invoke-PodClone {
         Get-VApp -Name (-join ($CreatedPortGroups[$i + 1].name.Substring(0,5), 'Pod')) | Get-VM | Where-Object -Property Name -NotLike '*PodRouter*' | 
             Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup $CreatedPortGroups[$i + 1] -Confirm:$false -RunAsync
     }
+<<<<<<< HEAD
 
+=======
+    
+    $names = @()
+>>>>>>> a9ec2ec4d6d5d7313b10ec0bbfc1d00c28b5e550
     if ($CreateUsers -eq $true) {
         foreach ($name in $CreatedPortGroups.Name) {   
             $names += $name.Substring(0, 8)
