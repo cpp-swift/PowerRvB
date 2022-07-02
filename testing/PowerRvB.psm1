@@ -232,8 +232,8 @@ function Invoke-RvByeBye {
         [String] $Tag
     )
 
-    Get-VApp -Tag $Tag | Remove-VApp -DeletePermanently
-    Get-VDPortgroup -Tag $Tag | Remove-VDPortGroup -DeletePermanently
+    Get-VApp -Tag $Tag | Remove-VApp -DeletePermanently -Confirm:$false
+    Get-VDPortgroup -Tag $Tag | Remove-VDPortGroup
     Get-ADUser -Filter {Description -eq $Tag} | Remove-ADUser
     Get-Tag -Name $Tag | Remove-Tag
     Get-TagCategory -Name $Tag | Remove-TagCategory
