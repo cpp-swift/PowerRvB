@@ -358,7 +358,7 @@ function New-PodUsers {
     $users = @{}
     for($i = 0; $i -lt $Pods.Length; $i++) {
         $Password = Get-RandomPassword 12 1 1 1 1
-        $Name = $Pods[$i] + '_User'
+        $Name = (-join ($Pods[$i], 'User'))
         $users.Add($Name, $Password)
         $Password = ConvertTo-SecureString -AsPlainText $Password -Force
         New-ADUser -Name $Name -ChangePasswordAtLogon $false -AccountPassword $Password -Enabled $true -Description $Description | Out-Null
