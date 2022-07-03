@@ -23,7 +23,7 @@ function Invoke-PodClone {
     
     for($i = 0; $i -lt $Pods; $i++) {
         New-VApp -Name (-join ($CreatedPortGroups[$i], '_Pod')) -Location (Get-ResourcePool -Name $Target) -ContentLibraryItem (Get-ContentLibraryItem -ContentLibrary Templates -Name $Template) -RunAsync | Out-Null
-        Write-Host 'Creating '  (-join ($CreatedPortGroups[$i], '_Pod'))`...
+        Write-Host 'Creating' (-join ($CreatedPortGroups[$i], '_Pod...'))
     }
 
     Write-Host 'IMPORTANT: Do not continue until all vApps are created. Press any key to continue...' -ForegroundColor Red
@@ -34,7 +34,7 @@ function Invoke-PodClone {
     for($i = 0; $i -lt $Pods; $i++) {
         if ($CreateRouters -eq $true) {
             New-PodRouter -Target (-join ($CreatedPortGroups[$i], '_Pod')) -WanPortGroup 0010_DefaultNetwork -LanPortGroup (-join ($CreatedPortGroups[$i], '_PodNetwork')) | Out-Null
-            Write-Host 'Creating '  (-join ($CreatedPortGroups[$i], '_Pod Router'))`...
+            Write-Host 'Creating' (-join ($CreatedPortGroups[$i], '_Pod Router...'))
         }
     }
 
