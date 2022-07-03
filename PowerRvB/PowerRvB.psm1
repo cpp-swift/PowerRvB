@@ -365,7 +365,7 @@ function New-PodUsers {
         Write-Host 'Creating user ' $Name
 
         # Creating the Roles Assignments on vSphere
-        New-VIPermission -Role (Get-VIRole -Name $Role) -Entity (Get-VApp -Name $Pods[$i] + '_Pod') -Principal ('SDC\' + $Name) | Out-Null
+        New-VIPermission -Role (Get-VIRole -Name $Role) -Entity (Get-VApp -Name (-join ($Pods[$i], + '_Pod'))) -Principal ('SDC\' + $Name) | Out-Null
     }
     
     # Outputting the User CSV to Desktop
