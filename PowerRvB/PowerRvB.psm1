@@ -365,7 +365,7 @@ function New-PodUsers {
         Write-Host 'Creating user ' $Name
 
         # Creating the Roles Assignments on vSphere
-        New-VIPermission -Role (Get-VIRole -Name $Role) -Entity (Get-VApp -Name $Pods[$i]) -Principal ('SDC\' + $Name) | Out-Null
+        New-VIPermission -Role (Get-VIRole -Name $Role) -Entity (Get-VApp -Name $Pods[$i] + '_Pod') -Principal ('SDC\' + $Name) | Out-Null
     }
     
     # Outputting the User CSV to Desktop
@@ -405,7 +405,7 @@ function Invoke-RvByeBye {
         [String] $Tag
     )
 
-    Get-VApp -Tag $Tag | Remove-VApp -DeletePermanently -Confirm:$false | Out-Null
+    Get-VApp -Tag $Tag | Remove-VApp -DeletePermanently | Out-Null
     Get-VDPortgroup -Tag $Tag | Remove-VDPortGroup | Out-Null
     Get-ADUser -Filter {Description -eq $Tag} | Remove-ADUser | Out-Null
     Get-Tag -Name $Tag | Remove-Tag | Out-Null
