@@ -13,7 +13,6 @@ function Invoke-PodClone {
         [Boolean] $CreateUsers,
         [String] $Role,
         [Boolean] $CreateRouters
-        
     )
 
     New-TagCategory -Name $Tag -Description $tag -EntityType VApp,DistributedPortGroup,VM | Out-Null
