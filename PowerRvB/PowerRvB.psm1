@@ -356,16 +356,16 @@ function New-PodUsers {
     # Creating the User Accounts
     Import-Module ActiveDirectory
     $users = @{}
-    for($i = 0; $i -lt $Pods.Length; $i++) {
-        $Password = Get-RandomPassword 12 1 1 1 1
-        $Name = (-join ($Pods[$i], 'User'))
-        $users.Add($Name, $Password)
-        $Password = ConvertTo-SecureString -AsPlainText $Password -Force
-        New-ADUser -Name $Name -ChangePasswordAtLogon $false -AccountPassword $Password -Enabled $true -Description $Description | Out-Null
-        Write-Host 'Creating user ' $Name
+    ForEach ($Pod in $Pods[0..$Pods.length - 2]) {
+            $Password = Get-RandomPassword 12 1 1 1 1
+            $Name = (-join ($Pod, 'User'))
+            $users.Add($Name, $Password)
+            $Password = ConvertTo-SecureString -AsPlainText $Password -Force
+            New-ADUser -Name $Name -ChangePasswordAtLogon $false -AccountPassword $Password -Enabled $true -Description $Description | Out-Null
+            Write-Host 'Creating user' $Name
 
-        # Creating the Roles Assignments on vSphere
-        New-VIPermission -Role (Get-VIRole -Name $Role) -Entity (Get-VApp -Name (-join ($Pods[$i], + '_Pod'))) -Principal ('SDC\' + $Name) | Out-Null
+            # Creating the Roles Assignments on vSphere
+            New-VIPermission -Role (Get-VIRole -Name $Role) -Entity (Get-VApp -Name $Pod) -Principal ('SDC\' + $Name) | Out-Null
     }
     
     # Outputting the User CSV to Desktop
