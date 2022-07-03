@@ -26,7 +26,7 @@ function Invoke-PodClone {
         Write-Host 'Creating '  (-join ($CreatedPortGroups[$i], '_Pod'))`...
     }
 
-    Write-Host -NoNewLine 'IMPORTANT: Do not continue until all vApps are created. Press any key to continue...' -ForegroundColor Red
+    Write-Host 'IMPORTANT: Do not continue until all vApps are created. Press any key to continue...' -ForegroundColor Red
     $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
     Write-Host 'Configuring the networks...'
 
@@ -46,8 +46,8 @@ function Invoke-PodClone {
     
     $names = @()
     if ($CreateUsers -eq $true) {
-        foreach ($name in $CreatedPortGroups.Name) {   
-            $names += $name.Substring(0, 8)
+        foreach ($name in $CreatedPortGroups) {   
+            $names += (-join ($name, '_Pod'))
         }
         Write-Host 'Creating the pod users...'
         New-PodUsers -Pods $names -Role $Role -Description $Tag | Out-Null
@@ -160,14 +160,14 @@ function New-DevPod {
         New-PodRouter -Target $Name -WanPortGroup $WanPortGroup -LanPortGroup (-join ($DevPortGroup[0], '_PodNetwork')) | Out-Null
     }
 
-    $Templates = Get-Template | sort
+    $Templates = Get-Template | Sort-Object
 
     foreach ($template in $Templates) {
         Write-Host $Templates.IndexOf($template)'-' "$template" `n
     }
 
     $boxes = (Read-Host "Enter the boxes to be created in this Developer Pod (Ex: 0, 2, 1). Press enter to continue").split(',')
-    $boxes = $boxes | %{$_ -Replace '\s',''}
+    $boxes = $boxes | ForEach-Object {$_ -Replace '\s',''}
 
     if($Boxes) {
         for ($i = 0; $i -lt $Boxes.Count; $i++) {
@@ -362,7 +362,8 @@ function New-PodUsers {
         $users.Add($Name, $Password)
         $Password = ConvertTo-SecureString -AsPlainText $Password -Force
         New-ADUser -Name $Name -ChangePasswordAtLogon $false -AccountPassword $Password -Enabled $true -Description $Description | Out-Null
-        
+        Write-Host 'Creating user ' $Name
+
         # Creating the Roles Assignments on vSphere
         New-VIPermission -Role (Get-VIRole -Name $Role) -Entity (Get-VApp -Name $Pods[$i]) -Principal ('SDC\' + $Name) | Out-Null
     }
