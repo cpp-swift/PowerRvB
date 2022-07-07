@@ -240,7 +240,7 @@ Specify if pod routers will be created.
 ### Syntax
 
 ```powershell
-Invoke-PodClone
+New-DevPod
 	-Name <String>
 	-Target <String>
 	[-CreateRouter <Boolean>]
