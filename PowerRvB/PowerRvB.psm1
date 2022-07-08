@@ -23,18 +23,18 @@ function Invoke-PodClone {
     
     for($i = 0; $i -lt $Pods; $i++) {
         New-VApp -Name (-join ($CreatedPortGroups[$i], '_Pod')) -Location (Get-ResourcePool -Name $Target) -ContentLibraryItem (Get-ContentLibraryItem -ContentLibrary Templates -Name $Template) -RunAsync | Out-Null
-        Write-Output 'Creating' (-join ($CreatedPortGroups[$i], '_Pod...'))
+        Write-Host 'Creating' (-join ($CreatedPortGroups[$i], '_Pod...'))
     }
 
-    Write-Output 'IMPORTANT: Do not continue until all vApps are created. Press any key to continue...' -ForegroundColor Red
+    Write-Host 'IMPORTANT: Do not continue until all vApps are created. Press any key to continue...' -ForegroundColor Red
     $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
-    Write-Output 'Configuring the networks...'
+    Write-Host 'Configuring the networks...'
 
 
     for($i = 0; $i -lt $Pods; $i++) {
         if ($CreateRouters -eq $true) {
             New-PodRouter -Target (-join ($CreatedPortGroups[$i], '_Pod')) -WanPortGroup 0010_DefaultNetwork -LanPortGroup (-join ($CreatedPortGroups[$i], '_PodNetwork')) | Out-Null
-            Write-Output 'Creating' (-join ($CreatedPortGroups[$i], '_Pod Router...'))
+            Write-Host 'Creating' (-join ($CreatedPortGroups[$i], '_Pod Router...'))
         }
     }
 
@@ -49,7 +49,7 @@ function Invoke-PodClone {
         foreach ($name in $CreatedPortGroups) {   
             $names += (-join ($name, '_Pod'))
         }
-        Write-Output 'Creating the pod users...'
+        Write-Host 'Creating the pod users...'
         New-PodUsers -Pods $names -Role $Role -Description $Tag | Out-Null
     }
     
@@ -163,7 +163,7 @@ function New-DevPod {
     $Templates = Get-Template | Sort-Object
 
     foreach ($template in $Templates) {
-        Write-Output $Templates.IndexOf($template)'-' "$template" `n
+        Write-Host $Templates.IndexOf($template)'-' "$template" `n
     }
 
     $boxes = (Read-Host "Enter the boxes to be created in this Developer Pod (Ex: 0, 2, 1). Press enter to continue").split(',')
@@ -362,7 +362,7 @@ function New-PodUsers {
             $users.Add($Name, $Password)
             $Password = ConvertTo-SecureString -AsPlainText $Password -Force
             New-ADUser -Name $Name -ChangePasswordAtLogon $false -AccountPassword $Password -Enabled $true -Description $Description | Out-Null
-            Write-Output 'Creating user' $Name
+            Write-Host 'Creating user' $Name
 
             # Creating the Roles Assignments on vSphere
             New-VIPermission -Role (Get-VIRole -Name $Role) -Entity (Get-VApp -Name $Pod) -Principal ('SDC\' + $Name) | Out-Null
