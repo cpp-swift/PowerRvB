@@ -9,7 +9,9 @@ function Invoke-PodClone {
         [Parameter(Mandatory)]
         [String] $Tag,
         [Parameter(Mandatory)]
-        [int] $FirstPortGroup,
+        [Boolean] $AssignPortGroups,
+        [Parameter(Mandatory)]
+        [int] $FirstPodNumber,
         [Boolean] $CreateUsers,
         [String] $Role,
         [Boolean] $CreateRouters
@@ -19,7 +21,7 @@ function Invoke-PodClone {
     $vappCategory = Get-TagCategory -Name $Tag
     New-Tag -Name $Tag -Category $vappCategory | Out-Null
 
-    $CreatedPortGroups = New-PodPortGroups -Portgroups $Pods -StartPort $FirstPortGroup -EndPort ($FirstPortGroup + $Pods + 20) -Tag $Tag
+    $CreatedPortGroups = New-PodPortGroups -Portgroups $Pods -StartPort $FirstPodNumber -EndPort ($FirstPodNumber + $Pods + 20) -Tag $Tag -AssignPortGroups $AssignPortGroups
     
     for($i = 0; $i -lt $Pods; $i++) {
         New-VApp -Name (-join ($CreatedPortGroups[$i], '_Pod')) -Location (Get-ResourcePool -Name $Target) -ContentLibraryItem (Get-ContentLibraryItem -ContentLibrary Templates -Name $Template) -RunAsync | Out-Null
@@ -28,11 +30,13 @@ function Invoke-PodClone {
 
     Write-Host 'IMPORTANT: Do not continue until all vApps are created. Press any key to continue...' -ForegroundColor Red
     $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
-    Write-Host 'Configuring the networks...'
-
-
-    for($i = 0; $i -lt $Pods; $i++) {
-        if ($CreateRouters -eq $true) {
+    
+    if($AssignPortGroups -eq $true) {
+        Write-Host 'Configuring the networks...'
+    }
+    
+    if ($CreateRouters -eq $true) {
+        for($i = 0; $i -lt $Pods; $i++) {
             New-PodRouter -Target (-join ($CreatedPortGroups[$i], '_Pod')) -WanPortGroup 0010_DefaultNetwork -LanPortGroup (-join ($CreatedPortGroups[$i], '_PodNetwork')) | Out-Null
             Write-Host 'Creating' (-join ($CreatedPortGroups[$i], '_Pod Router...'))
         }
@@ -40,8 +44,10 @@ function Invoke-PodClone {
 
     for($i = 0; $i -lt $Pods; $i++) {
         Get-VApp -Name (-join ($CreatedPortGroups[$i], '_Pod')) | New-TagAssignment -Tag (Get-Tag -Name $Tag) | Out-Null
+        if ($AssignPortGroups) {
         Get-VApp -Name (-join ($CreatedPortGroups[$i], '_Pod')) | Get-VM | Where-Object -Property Name -NotLike '*PodRouter*' | 
-            Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortGroup -name (-join ($CreatedPortGroups[$i], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null
+        Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortGroup -name (-join ($CreatedPortGroups[$i], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null
+        }
     }
     
     $names = @()
@@ -219,7 +225,8 @@ function New-PodPortGroups {
         [int] $StartPort,
         [Parameter(Mandatory=$true)]
         [int] $EndPort,
-        [String] $Tag
+        [String] $Tag,
+        [Boolean] $AssignPortGroups
 
     )
 
@@ -245,9 +252,11 @@ function New-PodPortGroups {
         if($PortGroupList.IndexOf($j) -ne -1) { $j++; continue }
         if($j -gt $EndPort) { Write-Error -Message "There are no more available port groups in the specified range."}
         else {
-            New-VDPortgroup -VDSwitch Main_DSW -Name (-join ($j, '_PodNetwork')) -VlanId $j | Out-Null
-            if($Tag) {
-                Get-VDPortGroup -Name (-join ($j, '_PodNetwork')) | New-TagAssignment -Tag (Get-Tag -Name $Tag) | Out-Null
+            if($AssignPortGroups) {
+                New-VDPortgroup -VDSwitch Main_DSW -Name (-join ($j, '_PodNetwork')) -VlanId $j | Out-Null
+                if($Tag) {
+                    Get-VDPortGroup -Name (-join ($j, '_PodNetwork')) | New-TagAssignment -Tag (Get-Tag -Name $Tag) | Out-Null
+                }
             }
             $j
             $j++
