@@ -58,7 +58,7 @@ function Invoke-PodClone {
         Clones the given vSphere vApp a specified number of times.
 
         .PARAMETER Template
-        Specifies the vApp to be cloned.
+        Specifies the vApp template to be cloned.
 
         .PARAMETER Target
         Specifies the resource pool the pods will be cloned to.
@@ -67,7 +67,7 @@ function Invoke-PodClone {
         Specifies the number of pods to be cloned.
 
         .PARAMETER Tag
-        Specifies the tag applied to the vApps.
+        Specifies the tag applied to the vApps, Port Groups, and Users.
 
         .PARAMETER FirstPortGroup
         Specifies the first port group Invoke-PodClone will check for port groups. 
@@ -163,7 +163,7 @@ function New-DevPod {
     $Templates = Get-Template | Sort-Object
 
     foreach ($template in $Templates) {
-        Write-Output $Templates.IndexOf($template)'-' "$template" `n
+        Write-Host $Templates.IndexOf($template)'-' "$template" `n
     }
 
     $boxes = (Read-Host "Enter the boxes to be created in this Developer Pod (Ex: 0, 2, 1). Press enter to continue").split(',')
@@ -187,7 +187,7 @@ function New-DevPod {
         Specifies the name of the vApp to be created.
 
         .PARAMETER Target
-        Specifies the resource pool the pod will be created in.
+        Specifies the resource pool the vApp will be created in.
         
         .PARAMETER CreateRouter
         Specifies if pod router will be created.
