@@ -31,7 +31,7 @@ Install-Module VMware.PowerCLI, PowerRvB
 If you want to make Pod Users, the ActiveDirectory module will also be needed. You will also need to run the commands on a computer with domain management tools (scar.sdc.cpp or simba.sdc.cpp).
 
 ```powershell
-Install-Module ActiveDirectory
+Import-Module ActiveDirectory
 ```
 
 ## Step 2: Connect to vSphere
