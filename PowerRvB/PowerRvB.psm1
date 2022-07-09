@@ -372,7 +372,7 @@ function New-PodUsers {
     # Creating the User Accounts
     Import-Module ActiveDirectory
     $users = @{}
-    ForEach ($Pod in $Pods[0..$Pods.length - 2]) {
+    ForEach ($Pod in $Pods) {
         $Password = Get-RandomPassword 12 1 1 1 1
         $Name = ( -join ($Pod, 'User'))
         $users.Add($Name, $Password)
