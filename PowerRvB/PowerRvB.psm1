@@ -377,7 +377,8 @@ function New-PodUsers {
         $Name = ( -join ($Pod, 'User'))
         $users.Add($Name, $Password)
         $Password = ConvertTo-SecureString -AsPlainText $Password -Force
-        New-ADUser -SamAccountName $Name -ChangePasswordAtLogon $false -AccountPassword $Password -Enabled $true -Description $Description | Out-Null
+        New-ADUser -Name $Name -ChangePasswordAtLogon $false -AccountPassword $Password -Enabled $true -Description $Description -UserPrincipalName (-join ($Name, '@sdc.cpp'))| Out-Null
+        Add-ADGroupMember -Identity 'RvB Competitors' -Members $Name
         Write-Host 'Creating user' $Name
 
         # Creating the Roles Assignments on vSphere
