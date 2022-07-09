@@ -31,7 +31,7 @@ Install-Module VMware.PowerCLI, PowerRvB
 If you want to make Pod Users, the ActiveDirectory module will also be needed. You will also need to run the commands on a computer with domain management tools (scar.sdc.cpp or simba.sdc.cpp).
 
 ```powershell
-Import-Module ActiveDirectory
+Install-Module ActiveDirectory
 ```
 
 ## Step 2: Connect to vSphere
@@ -90,9 +90,9 @@ Once the environment in the Development Pod is complete, it is time to create a 
 Using the template from Step 4 and **Invoke-PodClone**, you can create a specified number of Pods and supporting infrastructure. It will also tag all created resources for easy teardown using **Invoke-RvByeBye**
 
 ```powershell
-Invoke-PodClone -Template <Template> -Target <ResourcePool> -Pods <number> -Tag <Tag> -FirstPortGroup <number> -CreateUsers <$true|$false> -Role <vSphereRole> -CreateRouters <$true|$false>
+Invoke-PodClone -Template <Template> -Target <ResourcePool> -Pods <number> -Tag <Tag> -FirstPodNumber <number> -AssignPortGroups <$true|$false> -CreateUsers <$true|$false> -Role <vSphereRole> -CreateRouters <$true|$false>
 
-Invoke-PodClone -Template EvansTemplate -Target 02-07_Evan -Pods 20 -Tag 'RvB' -FirstPortGroup 1230 -CreateUsers $true -Role 01_RvBDirector -CreateRouters $true
+Invoke-PodClone -Template EvansTemplate -Target 02-07_Evan -Pods 20 -Tag 'RvB' -FirstPodNumber 1230 -AssignPortGroups $true -CreateUsers $true -Role 01_RvBDirector -CreateRouters $true
 ```
 
 <aside>
@@ -140,7 +140,7 @@ If users are created, a CSV of usernames and passwords to be used on vSphere wil
 ### Example 1
 
 ```powershell
-Invoke-PodClone -Template EvansTemplate -Target 02-07_Evan -Pods 20 -Tag 'RvB Tag' -FirstPortGroup 1230 -CreateUsers $true -Role 01_RvBDirector -CreateRouters $true
+Invoke-PodClone -Template EvansTemplate -Target 02-07_Evan -Pods 20 -Tag 'RvB Tag' -FirstPodNumber 1230 -AssignPortGroups $true -CreateUsers $true -Role 01_RvBDirector -CreateRouters $true
 ```
 
 This command clones the template, *EvansTemplate*, 20 times under the resource pool *02-07_Evan*. It creates 20 port groups starting at port group 1230. A domain user account is created for each pod and assigned the role *01_RvBDirector* on vSphere to their respective pod. It then creates a pod router for each pod. All created resources are tagged with *RvB Tag*.
@@ -148,7 +148,7 @@ This command clones the template, *EvansTemplate*, 20 times under the resource p
 ### Example 2
 
 ```powershell
-Invoke-PodClone -Template WindowsWorkshop -Target 03-01_PodLabs -Pods 5 -Tag 'Windows Workshop' -FirstPortGroup 1230
+Invoke-PodClone -Template WindowsWorkshop -Target 03-01_PodLabs -Pods 5 -Tag 'Windows Workshop' -FirstPodNumber 1230 -AssignPortGroups $false
 ```
 
 This command clones the template, *WindowsWorkshop*, 5 times under the resource pool *03-01_PodLabs*. It creates 5 port groups starting at port group 1230. Pod Users and Routers will not be created. All created resources are tagged with *Windows Workshop*.
@@ -195,11 +195,21 @@ Specifies the tag applied to the vApps, Port Groups, and Users.
 | Accept pipeline input: | False |
 | Mandatory: | True |
 
-`-FirstPortGroup`
+`-FirstPodNumber`
 
 Specifies the first port group Invoke-PodClone will check for port groups.
 
 | Type: | int |
+| --- | --- |
+| Default value: | None |
+| Accept pipeline input: | False |
+| Mandatory: | True |
+
+`-AssignPortGroups`
+
+Specifies if port groups will be assigned to the pods.
+
+| Type: | Boolean |
 | --- | --- |
 | Default value: | None |
 | Accept pipeline input: | False |
@@ -240,7 +250,7 @@ Specify if pod routers will be created.
 ### Syntax
 
 ```powershell
-New-DevPod
+Invoke-PodClone
 	-Name <String>
 	-Target <String>
 	[-CreateRouter <Boolean>]
