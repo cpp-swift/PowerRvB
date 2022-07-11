@@ -14,7 +14,8 @@ function Invoke-PodClone {
         [int] $FirstPodNumber,
         [Boolean] $CreateUsers,
         [String] $Role,
-        [Boolean] $CreateRouters
+        [Boolean] $CreateRouters,
+        [String] $WanPortGroup='0010_DefaultNetwork'
     )
 
     New-TagCategory -Name $Tag -Description $tag -EntityType VApp, DistributedPortGroup, VM | Out-Null
@@ -37,7 +38,7 @@ function Invoke-PodClone {
     
     if ($CreateRouters -eq $true) {
         for ($i = 0; $i -lt $Pods; $i++) {
-            New-PodRouter -Target ( -join ($CreatedPortGroups[$i], '_Pod')) -WanPortGroup 0010_DefaultNetwork -LanPortGroup ( -join ($CreatedPortGroups[$i], '_PodNetwork')) | Out-Null
+            New-PodRouter -Target ( -join ($CreatedPortGroups[$i], '_Pod')) -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($CreatedPortGroups[$i], '_PodNetwork')) | Out-Null
             Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod Router...'))
         }
     }
@@ -225,7 +226,7 @@ function New-DevPod {
 function New-PodPortGroups {
 
     param(
-        [ValidateRange(1, 50)]
+        [ValidateRange(1, 100)]
         [Parameter(Mandatory = $true)]
         [int] $Portgroups,
         [Parameter(Mandatory = $true)]
