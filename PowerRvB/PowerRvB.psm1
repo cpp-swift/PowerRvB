@@ -162,7 +162,7 @@ function New-DevPod {
     )
 
     # Creates the Dev Port Group, vApp, and Router
-    $DevPortGroup = New-PodPortGroups -Portgroups 1 -StartPort 1300 -EndPort 1350
+    $DevPortGroup = New-PodPortGroups -Portgroups 1 -StartPort 1300 -EndPort 1350 -AssignPortGroups $true
     New-VApp -Location $Target -Name $Name | Out-Null
     if ($CreateRouter -eq $true) {
         New-PodRouter -Target $Name -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($DevPortGroup[0], '_PodNetwork')) -ErrorAction Stop| Out-Null
@@ -230,8 +230,10 @@ function New-PodPortGroups {
         [ValidateRange(1, 100)]
         [Parameter(Mandatory = $true)]
         [int] $Portgroups,
+        [ValidateRange(1000, 2000)]
         [Parameter(Mandatory = $true)]
         [int] $StartPort,
+        [ValidateRange(1000, 2000)]
         [Parameter(Mandatory = $true)]
         [int] $EndPort,
         [String] $Tag,
@@ -456,3 +458,45 @@ function Invoke-RvByeBye {
     #>
 }
 
+function Invoke-ConfigureVMs {
+    param (
+        [cmdletbinding(SupportsShouldProcess)]
+        [Parameter(Mandatory,ValueFromPipeline=$true)]
+        [Object] $VM,
+        [string] $NewTag=$null,
+        [string] $Name,
+        [int] $NewPortGroup=$null,
+        [int] $NumCpu=$null,
+        [int] $MemoryGB=$null,
+        [Boolean] $CpuHotAddEnabled,
+        [Boolean] $CpuHotRemoveEnabled,
+        [Boolean] $MemoryHotAddEnabled
+
+        
+    )
+
+    begin {
+
+        if($NewPortGroup) {
+            try {
+                Get-VDPortgroup -Name ( -join ($NewPortGroup, '_PodNetwork')) -ErrorAction Stop
+            }
+            catch {
+                New-VDPortgroup -VDSwitch Main_DSW -Name ( -join ($NewPortGroup, '_PodNetwork')) -VlanId $NewPortGroup | Out-Null
+                Get-VDPortGroup -Name ( -join ($NewPortGroup, '_PodNetwork')) | New-TagAssignment -Tag (Get-Tag -Name $NewTag)
+            }
+        }
+    }
+
+    process {
+        #$ErrorActionPreference = 'SilentlyContinue'
+        if ($NewTag) { $VM | New-TagAssignment -Tag (Get-Tag -Name $NewTag)}
+        if ($NewPortGroup) { $VM | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name ( -join ($NewPortGroup, "_PodNetwork"))) -Confirm:$false -RunAsync | Out-Null }
+        if ($NumCpu) { $VM | Set-VM -NumCpu $NumCpu -Confirm:$false -RunAsync }
+        if ($MemoryGB) { $VM | Set-VM -MemoryGB $MemoryGB -Confirm:$false -RunAsync }
+        if ($Name) { $VM | Set-VM -Name $Name -RunAsync -Confirm:$false}
+        if ($MemoryHotAddEnabled) {$VM | Stop-VM -Confirm:$false | Set-VM -MemoryHotAddEnabled $MemoryHotAddEnabled -Confirm:$false -RunAsync}
+        if ($CpuHotAddEnabled) {$VM | Stop-VM -Confirm:$false | Set-VM -CpuHotAddEnabled $CpuHotAddEnabled -Confirm:$false -RunAsync}
+        if ($CpuHotRemoveEnabled) { $VM | Stop-VM -Confirm:$false | Set-VM -CpuHotRemoveEnabled $CpuHotRemoveEnabled -Confirm:$false -RunAsync}
+    }
+}
