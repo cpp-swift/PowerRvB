@@ -178,7 +178,7 @@ function New-DevPod {
     $boxes = $boxes | ForEach-Object { $_ -Replace '\s', '' }
 
     if ($Boxes) {
-        for ($i = 0; $i -lt $Boxes.Count; $i++) {
+        for ($i = 0; $i -ile $Boxes.Count; $i++) {
             New-VM -Name $Templates.Get($Boxes[$i]).Name `
                 -ResourcePool (Get-VApp -Name $Name) `
                 -Datastore (Get-DataStore -Name Ursula) `
