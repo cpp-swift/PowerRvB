@@ -179,10 +179,10 @@ function New-DevPod {
 
     if ($Boxes) {
         for ($i = 0; $i -ile $Boxes.Count; $i++) {
-            New-VM -Name $Templates.Get($Boxes[$i]).Name `
+            New-VM -Name $Templates.Get($Boxes[$i].ToString()).Name `
                 -ResourcePool (Get-VApp -Name $Name) `
                 -Datastore (Get-DataStore -Name Ursula) `
-                -Template $Templates.get($Boxes[$i]) -RunAsync -ErrorAction Stop | Out-Null
+                -Template $Templates.get($Boxes[$i].ToString()) -RunAsync -ErrorAction Stop | Out-Null
         }
         
         Write-Host 'IMPORTANT: Do not continue until all VMs are created. Press any key to continue...' -ForegroundColor Red
