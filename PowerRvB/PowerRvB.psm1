@@ -12,6 +12,8 @@ function Invoke-PodClone {
         [Boolean] $AssignPortGroups,
         [Parameter(Mandatory)]
         [int] $FirstPodNumber,
+        [Parameter(Mandatory)]
+        [pscredential] $Credential,
         [Boolean] $CreateUsers,
         [String] $Role,
         [Boolean] $CreateRouters,
@@ -28,10 +30,37 @@ function Invoke-PodClone {
 
     $CreatedPortGroups = New-PodPortGroups -Portgroups $Pods -StartPort $FirstPodNumber -EndPort ($FirstPodNumber + $Pods + 20) -Tag $Tag -AssignPortGroups $AssignPortGroups
     
+    $Range = $CreatedPortGroups[0]..$CreatedPortGroups[$CreatedPortGroups.length - 1]
+
+    foreach ($Pod in $Range) {
+        $ScriptBlock = {
+            Write-Host 'Creating' ( -join ($Pod, '_Pod...'))
+            Set-PowerCLIConfiguration -InvalidCertificateAction Ignore -DisplayDeprecationWarnings: $false -ParticipateInCeip: $false -Confirm: $false -Scope Session
+            Connect-VIServer -Server elsa.sdc.cpp -Credential $Credential
+            New-VApp -Name ( -join ($Pod, '_Pod')) -Location (Get-ResourcePool -Name $Target -ErrorAction Stop) -ContentLibraryItem (Get-ContentLibraryItem -ContentLibrary Templates -Name $Template -ErrorAction Stop) -RunAsync -ErrorAction Stop | Out-Null
+        }
+        Start-Job -ScriptBlock $ScriptBlock
+    }
+
+    Do {
+        $Jobs = Get-Job | Where-Object State -EQ 'Completed'
+
+        if ($Jobs.Count -eq $Range.length) {
+            foreach ($Job in $Jobs) {
+                Receive-Job -Id $Job.Id  -Keep
+            }
+        }
+        Start-Sleep -Seconds 30
+        Write-Verbose -Message "[$(Get-Date -Format 'MM/dd/yyyy - HH:mm')] Waiting 30 seconds for jobs to complete. $($Jobs.Count)/$($Range.Length) completed"
+    }
+
+    Until ( $Jobs.Count -eq $Range.Length )
+
+    <#
     for ($i = 0; $i -lt $Pods; $i++) {
         Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod...'))
         New-VApp -Name ( -join ($CreatedPortGroups[$i], '_Pod')) -Location (Get-ResourcePool -Name $Target -ErrorAction Stop) -ContentLibraryItem (Get-ContentLibraryItem -ContentLibrary Templates -Name $Template -ErrorAction Stop) -RunAsync -ErrorAction Stop | Out-Null
-    }
+    }#>
 
     Write-Host 'IMPORTANT: Do not continue until all vApps are created. Press any key to continue...' -ForegroundColor Red
     $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
