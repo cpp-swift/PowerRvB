@@ -47,25 +47,37 @@ function Invoke-PodClone {
         }
     }
 
+    if ($AssignPortGroups) {
     $CloningCompletion = $true
-    for($i = 0; $i -lt $CreatedPortGroups.length; $i++) {
+    While ($CloningCompletion) {
+        $testNetAdapter = Get-VApp -Tag $Tag | Get-VM | Get-NetworkAdapter
         try {
-            $CloningCompletion = $false
-            for ($i = 0; $i -lt $Pods; $i++) {
-                if ($AssignPortGroups) {
-                    Get-VApp -Name ( -join ($CreatedPortGroups[$i], '_Pod')) -ErrorAction Stop | Get-VM | Where-Object -Property Name -NotLike '*PodRouter*' |
-                        Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortGroup -name ( -join ($CreatedPortGroups[$i], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null
-                    Get-VApp -Name ( -join ($CreatedPortGroups[$i], '_Pod')) -ErrorAction Stop | Get-VM | Where-Object -Property Name -Like '*PodRouter*' | Get-NetworkAdapter -Name "Network adapter 1" -ErrorAction Stop | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $WanPortGroup) -Confirm:$false -RunAsync | Out-Null
-                    Get-VApp -Name ( -join ($CreatedPortGroups[$i], '_Pod')) -ErrorAction Stop | Get-VM | Where-Object -Property Name -Like '*PodRouter*' | Get-NetworkAdapter -Name "Network adapter 2" | Set-NetworkAdapter -Portgroup (Get-VDPortGroup -name ( -join ($CreatedPortGroups[$i], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null
+            if ($testNetAdapter.Count -eq (($VMsToClone.Count + 2) * $Pods)) {
+                $CloningCompletion = $false
+                if (Get-VApp -Tag $Tag -ErrorAction Stop | Get-VM | Where-Object -Property Name -NotLike '*PodRouter*') {
+                    Get-VApp -Tag $Tag -ErrorAction Stop | Get-VM | Where-Object -Property Name -NotLike '*PodRouter*' |
+                        %{  Get-NetworkAdapter -VM $_ -Name "Network adapter 1" -ErrorAction Stop | 
+                            Set-NetworkAdapter -Portgroup (Get-VDPortGroup -name ( -join ($_.Name.Split("_")[0], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null 
+                        }
+                }
+                Get-VApp -Tag $Tag -ErrorAction Stop | Get-VM | Where-Object -Property Name -Like '*PodRouter*' | Get-NetworkAdapter -Name "Network adapter 1" -ErrorAction Stop | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $WanPortGroup) -Confirm:$false -RunAsync | Out-Null
+                Get-VApp -Tag $Tag -ErrorAction Stop | Get-VM | Where-Object -Property Name -Like '*PodRouter*' |
+                    %{  Get-NetworkAdapter -VM $_ -Name "Network adapter 2" -ErrorAction Stop | 
+                        Set-NetworkAdapter -Portgroup (Get-VDPortGroup -name ( -join ($_.Name.Split("_")[0], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null 
                     }
                 }
-            }
-        catch {
-            $CloningCompletion = $true
-            Sleep -Seconds 5
-            Write-Host "Cloning is not complete..."
+                else { 
+                    Sleep -Seconds 5
+                }
+            }  
+            catch {
+                $CloningCompletion = $true
+                Sleep -Seconds 5
+                Write-Host "Cloning is not complete... Please do not cancel (Justin). If you think you can cancel it because you are not Justin (Dylan) please do not cancel it."
+            }   
         }
     }
+    
     
     
     $names = @()
