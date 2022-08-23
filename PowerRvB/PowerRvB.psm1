@@ -1,7 +1,7 @@
 function Invoke-PodClone {
     param(
         [Parameter(Mandatory)]
-        [String] $Template,
+        [String] $SourceResourcePool,
         [Parameter(Mandatory)]
         [String] $Target,
         [Parameter(Mandatory)]
@@ -12,8 +12,6 @@ function Invoke-PodClone {
         [Boolean] $AssignPortGroups,
         [Parameter(Mandatory)]
         [int] $FirstPodNumber,
-        [Parameter(Mandatory)]
-        [pscredential] $Credential,
         [Boolean] $CreateUsers,
         [String] $Role,
         [Boolean] $CreateRouters,
@@ -29,57 +27,46 @@ function Invoke-PodClone {
     }
 
     $CreatedPortGroups = New-PodPortGroups -Portgroups $Pods -StartPort $FirstPodNumber -EndPort ($FirstPodNumber + $Pods + 20) -Tag $Tag -AssignPortGroups $AssignPortGroups
-    
-    $Range = $CreatedPortGroups[0]..$CreatedPortGroups[$CreatedPortGroups.length - 1]
 
-    foreach ($Pod in $Range) {
-        $ScriptBlock = {
-            Write-Host 'Creating' ( -join ($Pod, '_Pod...'))
-            Set-PowerCLIConfiguration -InvalidCertificateAction Ignore -DisplayDeprecationWarnings: $false -ParticipateInCeip: $false -Confirm: $false -Scope Session
-            Connect-VIServer -Server elsa.sdc.cpp -Credential $Credential
-            New-VApp -Name ( -join ($Pod, '_Pod')) -Location (Get-ResourcePool -Name $Target -ErrorAction Stop) -ContentLibraryItem (Get-ContentLibraryItem -ContentLibrary Templates -Name $Template -ErrorAction Stop) -RunAsync -ErrorAction Stop | Out-Null
-        }
-        Start-Job -ScriptBlock $ScriptBlock
-    }
-
-    Do {
-        $Jobs = Get-Job | Where-Object State -EQ 'Completed'
-
-        if ($Jobs.Count -eq $Range.length) {
-            foreach ($Job in $Jobs) {
-                Receive-Job -Id $Job.Id  -Keep
-            }
-        }
-        Start-Sleep -Seconds 30
-        Write-Verbose -Message "[$(Get-Date -Format 'MM/dd/yyyy - HH:mm')] Waiting 30 seconds for jobs to complete. $($Jobs.Count)/$($Range.Length) completed"
-    }
-
-    Until ( $Jobs.Count -eq $Range.Length )
-
-    <#
     for ($i = 0; $i -lt $Pods; $i++) {
         Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod...'))
-        New-VApp -Name ( -join ($CreatedPortGroups[$i], '_Pod')) -Location (Get-ResourcePool -Name $Target -ErrorAction Stop) -ContentLibraryItem (Get-ContentLibraryItem -ContentLibrary Templates -Name $Template -ErrorAction Stop) -RunAsync -ErrorAction Stop | Out-Null
-    }#>
+        New-VApp -Name ( -join ($CreatedPortGroups[$i], '_Pod')) -Location (Get-ResourcePool -Name $Target -ErrorAction Stop) -ErrorAction Stop | New-TagAssignment -Tag $Tag | Out-Null
+    }
 
-    Write-Host 'IMPORTANT: Do not continue until all vApps are created. Press any key to continue...' -ForegroundColor Red
-    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
-    
+    $VMsToClone = Get-ResourcePool -Name $SourceResourcePool | Get-VM | Set-VM -ToTemplate -Confirm:$false
+
+    foreach ($VM in $VMsToClone) {
+        Get-VApp -Tag $Tag | %{New-VM -Template $VM -Name ( -join (($_.Name.Split("P")[0]), $VM.Name)) -ResourcePool (Get-VApp -Name ($_.Name)).Name -RunAsync}
+    }
+
     if ($CreateRouters -eq $true) {
         Write-Host 'Creating the pod routers...'
         for ($i = 0; $i -lt $Pods; $i++) {
             Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod Router...'))
-            New-PodRouter -Target ( -join ($CreatedPortGroups[$i], '_Pod')) -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($CreatedPortGroups[$i], '_PodNetwork')) -ErrorAction Stop | Out-Null
+            New-PodRouter -Target ( -join ($CreatedPortGroups[$i], '_Pod')) <#-WanPortGroup $WanPortGroup#> -LanPortGroup ( -join ($CreatedPortGroups[$i], '_PodNetwork')) -ErrorAction Stop | Out-Null
         }
     }
 
-    for ($i = 0; $i -lt $Pods; $i++) {
-        Get-VApp -Name ( -join ($CreatedPortGroups[$i], '_Pod')) | New-TagAssignment -Tag (Get-Tag -Name $Tag) | Out-Null
-        if ($AssignPortGroups) {
-            Get-VApp -Name ( -join ($CreatedPortGroups[$i], '_Pod')) -ErrorAction Stop | Get-VM | Where-Object -Property Name -NotLike '*PodRouter*' | 
-            Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortGroup -name ( -join ($CreatedPortGroups[$i], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null
+    $CloningCompletion = $true
+    for($i = 0; $i -lt $CreatedPortGroups.length; $i++) {
+        try {
+            $CloningCompletion = $false
+            for ($i = 0; $i -lt $Pods; $i++) {
+                if ($AssignPortGroups) {
+                    Get-VApp -Name ( -join ($CreatedPortGroups[$i], '_Pod')) -ErrorAction Stop | Get-VM | Where-Object -Property Name -NotLike '*PodRouter*' |
+                        Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortGroup -name ( -join ($CreatedPortGroups[$i], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null
+                    Get-VApp -Name ( -join ($CreatedPortGroups[$i], '_Pod')) -ErrorAction Stop | Get-VM | Where-Object -Property Name -Like '*PodRouter*' | Get-NetworkAdapter -Name "Network adapter 1" -ErrorAction Stop | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $WanPortGroup) -Confirm:$false -RunAsync | Out-Null
+                    Get-VApp -Name ( -join ($CreatedPortGroups[$i], '_Pod')) -ErrorAction Stop | Get-VM | Where-Object -Property Name -Like '*PodRouter*' | Get-NetworkAdapter -Name "Network adapter 2" | Set-NetworkAdapter -Portgroup (Get-VDPortGroup -name ( -join ($CreatedPortGroups[$i], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null
+                    }
+                }
+            }
+        catch {
+            $CloningCompletion = $true
+            Sleep -Seconds 5
+            Write-Host "Cloning is not complete..."
         }
     }
+    
     
     $names = @()
     if ($CreateUsers -eq $true) {
@@ -89,7 +76,8 @@ function Invoke-PodClone {
         Write-Host 'Creating the pod users...'
         New-PodUsers -Pods $names -Role $Role -Description $Tag | Out-Null
     }
-    
+
+    $VMsToClone | Set-Template -ToVM -Confirm:$false | Move-VM -Destination $SourceResourcePool
     <#
         .SYNOPSIS
         Clones the given vSphere vApp a specified number of times.
@@ -192,7 +180,7 @@ function New-DevPod {
 
     # Creates the Dev Port Group, vApp, and Router
     $DevPortGroup = New-PodPortGroups -Portgroups 1 -StartPort 1300 -EndPort 1350 -AssignPortGroups $true
-    New-VApp -Location $Target -Name $Name | Out-Null
+    New-ResourcePool -Location $Target -Name $Name | Out-Null
     if ($CreateRouter -eq $true) {
         New-PodRouter -Target $Name -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($DevPortGroup[0], '_PodNetwork')) -ErrorAction Stop| Out-Null
     }
@@ -209,7 +197,7 @@ function New-DevPod {
     if ($Boxes) {
         for ($i = 0; $i -ile $Boxes.Count; $i++) {
             New-VM -Name $Templates.Get($Boxes[$i].ToString()).Name `
-                -ResourcePool (Get-VApp -Name $Name) `
+                -ResourcePool (Get-ResourcePool -Name $Name) `
                 -Datastore (Get-DataStore -Name Ursula) `
                 -Template $Templates.get($Boxes[$i].ToString()) -RunAsync -ErrorAction Stop | Out-Null
         }
@@ -218,7 +206,7 @@ function New-DevPod {
         $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
     
         for ($i = 0; $i -lt $Boxes.Count; $i++) {
-            Get-VApp -Name $Name -ErrorAction Stop | Get-VM | Where-Object -Property Name -NotLike '*PodRouter*' | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortGroup -Name ( -join ($DevPortGroup[0], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null
+            Get-ResourcePool -Name $Name -ErrorAction Stop | Get-VM | Where-Object -Property Name -NotLike '*PodRouter*' | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortGroup -Name ( -join ($DevPortGroup[0], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null
         }
     }
 
@@ -346,8 +334,8 @@ function New-PodRouter {
     param (
         [Parameter(Mandatory = $true)]
         [String] $Target,
-        [Parameter(Mandatory = $true)]
-        [String] $WanPortGroup,
+        # [Parameter(Mandatory = $true)]
+        # [String] $WanPortGroup,
         [Parameter(Mandatory = $true)]
         [String] $LanPortGroup
     )
@@ -355,18 +343,12 @@ function New-PodRouter {
     # Creating the Router
     $name = ( -join ($LanPortGroup.Substring(0, 4), '_PodRouter'))
     New-VM -Name $name `
-        -ResourcePool (Get-VApp -Name $Target) `
+        -ResourcePool (Get-Vapp -Name $Target).Name `
         -Datastore (Get-DataStore -Name Ursula) `
-        -Template (Get-Template -Name "pfSense Blank") | Out-Null
+        -Template (Get-Template -Name "pfSense Blank") -RunAsync | Out-Null
 
     # Assigning port groups to the interfaces
-    try {
-        Get-VM -Name $name -ErrorAction Stop | Get-NetworkAdapter -Name "Network adapter 1" -ErrorAction Stop | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $WanPortGroup) -Confirm:$false -RunAsync | Out-Null
-        Get-VM -Name $name -ErrorAction Stop| Get-NetworkAdapter -Name "Network adapter 2" -ErrorAction Stop | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $LanPortGroup) -Confirm:$false -RunAsync | Out-Null
-    }
-    catch {
-        "Error occurred while configuring $name's interfaces..."
-    }
+   
     <#
         .SYNOPSIS
         Creates a router in a specified vApp.
@@ -414,13 +396,13 @@ function New-PodUsers {
     ForEach ($Pod in $Pods) {
         $Password = Get-RandomPassword 12 1 1 1 1
         $Name = ( -join ($Pod, 'User'))
-        $Password = ConvertTo-SecureString -AsPlainText $Password -Force
+        $SecurePassword = ConvertTo-SecureString -AsPlainText $Password -Force
         Write-Host 'Creating user' $Name
-        New-ADUser -Name $Name -ChangePasswordAtLogon $false -AccountPassword $Password -Enabled $true -Description $Description -UserPrincipalName (-join ($Name, '@sdc.cpp'))| Out-Null
+        New-ADUser -Name $Name -ChangePasswordAtLogon $false -AccountPassword $SecurePassword -Enabled $true -Description $Description -UserPrincipalName (-join ($Name, '@sdc.cpp'))| Out-Null
         Add-ADGroupMember -Identity 'RvB Competitors' -Members $Name
 
         # Creating the Roles Assignments on vSphere
-        New-VIPermission -Role (Get-VIRole -Name $Role -ErrorAction Stop) -Entity (Get-VApp -Name $Pod) -Principal ('SDC\' + $Name) | Out-Null
+        New-VIPermission -Role (Get-VIRole -Name $Role -ErrorAction Stop) -Entity (Get-ResourcePool -Name $Pod) -Principal ('SDC\' + $Name) | Out-Null
         
         #Append User to CSV
         $out = "$Name,$Password"
@@ -460,8 +442,9 @@ function Invoke-RvByeBye {
         [Parameter(Mandatory)]
         [String] $Tag
     )
-
-    Get-VApp -Tag $Tag -ErrorAction Stop | Remove-VApp -DeletePermanently -ErrorAction Stop | Out-Null
+    Get-ResourcePool -Tag $Tag | Stop-VM
+    Get-VApp -Tag $Tag | Get-VM | Remove-VM -DeletePermanently | Out-Null
+    Get-Vapp -Tag $Tag | Remove-VApp -DeletePermanently | Out-Null
     Get-VDPortgroup -Tag $Tag -ErrorAction Stop | Remove-VDPortGroup -ErrorAction Stop | Out-Null
     Get-ADUser -Filter { Description -eq $Tag } | Remove-ADUser -ErrorAction Stop | Out-Null
     Get-TagCategory -Name $Tag -ErrorAction Stop | Remove-TagCategory -ErrorAction Stop | Out-Null
