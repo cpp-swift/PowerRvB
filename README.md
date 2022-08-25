@@ -79,20 +79,18 @@ Enter the boxes to be created in this Developer Pod (Ex: 0, 2, 1). Press enter t
 
 </aside>
 
-## Step 4: Make a vApp Template
+## Step 4: Prepare a Resource Pool for Cloning
 
-Once the environment in the Development Pod is complete, it is time to create a template for cloning. **If there is a Development Pod Router, delete the router before making a template of the vApp.** Individual Pod Routers must be created with the pods.
-
-- Right click the vApp in vSphere, then create an OVF template in the Templates content library.
+Create a new Resource Pool. Clone the VMs from the development pod into a new Resource Pool. Do not clone the pod router into the new resource pool.
 
 ## Step 5: Clone the Pods
 
 Using the template from Step 4 and **Invoke-PodClone**, you can create a specified number of Pods and supporting infrastructure. It will also tag all created resources for easy teardown using **Invoke-RvByeBye**
 
 ```powershell
-PS> Invoke-PodClone -Template <Template> -Target <ResourcePool> -Pods <number> -Tag <Tag> -FirstPodNumber <number> -AssignPortGroups <$true|$false> -CreateUsers <$true|$false> -Role <vSphereRole> -CreateRouters <$true|$false> -WanPortGroup <PortGroup>
+PS> Invoke-PodClone -SourceResourcePool <ResourcePool> -Target <ResourcePool> -Pods <number> -Tag <Tag> -FirstPodNumber <number> -AssignPortGroups <$true|$false> -CreateUsers <$true|$false> -Role <vSphereRole> -CreateRouters <$true|$false> -WanPortGroup <PortGroup>
 
-PS> Invoke-PodClone -Template EvansTemplate -Target 02-07_Evan -Pods 20 -Tag 'RvB' -FirstPodNumber 1230 -AssignPortGroups $true -CreateUsers $true -Role 01_RvBDirector -CreateRouters $true
+PS> Invoke-PodClone -SourceResourcePool DevPod -Target 02-07_Evan -Pods 20 -Tag 'RvB Tag' -AssignPortGroups $True -FirstPodNumber 1230 -AssignPortGroups $true -CreateUsers $true -Role 01_RvBDirector -CreateRouters $true
 ```
 
 <aside>
@@ -121,11 +119,12 @@ PS> Invoke-RvByeBye -Tag RvB
 
 ```powershell
 Invoke-PodClone
-	-Template <String>
+	-SourceResourcePool <String>
 	-Target <String>
 	-Pods <int>
 	-Tag <String>
-	-FirstPortGroup <int>
+	-AssignPortGroups <boolean>
+	-FirstPodNumber <int>
 	[-CreateUsers <boolean>]
 	[-Role <String>]
 	[-CreateRouters <Boolean>]
@@ -134,29 +133,29 @@ Invoke-PodClone
 
 ### Description
 
-The **Invoke-PodClone** cmdlet clones the given vSphere vApp a specified number of times. It also creates the required networking resources and users for each pod. 
+The **Invoke-PodClone** cmdlet clones the given vSphere Resource Pool a specified number of times. It also creates the required networking resources and users for each pod. 
 
 If users are created, a CSV of usernames and passwords to be used on vSphere will be generated on the command runner’s desktop.
 
 ### Example 1
 
 ```powershell
-PS> Invoke-PodClone -Template EvansTemplate -Target 02-07_Evan -Pods 20 -Tag 'RvB Tag' -FirstPodNumber 1230 -AssignPortGroups $true -CreateUsers $true -Role 01_RvBDirector -CreateRouters $true
+PS> Invoke-PodClone -SourceResourcePool DevPod -Target 02-07_Evan -Pods 20 -Tag 'RvB Tag' -AssignPortGroups $True -FirstPodNumber 1230 -AssignPortGroups $true -CreateUsers $true -Role 01_RvBDirector -CreateRouters $true
 ```
 
-This command clones the template, *EvansTemplate*, 20 times under the resource pool *02-07_Evan*. It creates 20 port groups starting at port group 1230. A domain user account is created for each pod and assigned the role *01_RvBDirector* on vSphere to their respective pod. It then creates a pod router for each pod. All created resources are tagged with *RvB Tag*.
+This command clones the template, *DevPod*, 20 times under the resource pool *02-07_Evan*. It creates 20 port groups starting at port group 1230. A domain user account is created for each pod and assigned the role *01_RvBDirector* on vSphere to their respective pod. It then creates a pod router for each pod. All created resources are tagged with *RvB Tag*.
 
 ### Example 2
 
 ```powershell
-PS> Invoke-PodClone -Template WindowsWorkshop -Target 03-01_PodLabs -Pods 5 -Tag 'Windows Workshop' -FirstPodNumber 1230 -AssignPortGroups $false
+PS> Invoke-PodClone -SourceResourcePool WindowsWorkshop -Target 03-01_PodLabs -Pods 5 -Tag 'Windows Workshop' -AssignPortGroups $True -FirstPodNumber 1230 -AssignPortGroups $false
 ```
 
-This command clones the template, *WindowsWorkshop*, 5 times under the resource pool *03-01_PodLabs*. It creates 5 port groups starting at port group 1230. Pod Users and Routers will not be created. All created resources are tagged with *Windows Workshop*.
+This command clones the Resource Pool, *WindowsWorkshop*, 5 times under the resource pool *03-01_PodLabs*. It creates 5 port groups starting at port group 1230. Pod Users and Routers will not be created. All created resources are tagged with *Windows Workshop*.
 
 ### Parameters
 
-`-Template`
+`-SourceResourcePool`
 
 Specifies the vApp template to be cloned.
 
