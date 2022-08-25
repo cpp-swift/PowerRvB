@@ -356,8 +356,8 @@ function New-PodRouter {
     param (
         [Parameter(Mandatory = $true)]
         [String] $Target,
-        # [Parameter(Mandatory = $true)]
-        # [String] $WanPortGroup,
+        [Parameter(Mandatory = $true)]
+        [String] $WanPortGroup,
         [Parameter(Mandatory = $true)]
         [String] $LanPortGroup
     )
@@ -424,7 +424,7 @@ function New-PodUsers {
         Add-ADGroupMember -Identity 'RvB Competitors' -Members $Name
 
         # Creating the Roles Assignments on vSphere
-        New-VIPermission -Role (Get-VIRole -Name $Role -ErrorAction Stop) -Entity (Get-ResourcePool -Name $Pod) -Principal ('SDC\' + $Name) | Out-Null
+        New-VIPermission -Role (Get-VIRole -Name $Role -ErrorAction Stop) -Entity (Get-VApp -Name $Pod) -Principal ('SDC\' + $Name) | Out-Null
         
         #Append User to CSV
         $out = "$Name,$Password"
