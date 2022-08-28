@@ -33,17 +33,19 @@ function Invoke-PodClone {
         New-VApp -Name ( -join ($CreatedPortGroups[$i], '_Pod')) -Location (Get-ResourcePool -Name $Target -ErrorAction Stop) -ErrorAction Stop | New-TagAssignment -Tag $Tag | Out-Null
     }
 
-    $VMsToClone = Get-ResourcePool -Name $SourceResourcePool | Get-VM | Set-VM -ToTemplate -Confirm:$false
+    $VMsToClone = Get-ResourcePool -Name $SourceResourcePool | Get-VM
+
+    $VMsToClone | ForEach-Object { if (!(Get-Snapshot -VM $_ | Where-Object name -eq SnapshotForCloning)) {New-Snapshot -VM $_ -Name SnapshotForCloning} }
 
     foreach ($VM in $VMsToClone) {
-        Get-VApp -Tag $Tag | %{New-VM -Template $VM -Name ( -join (($_.Name.Split("P")[0]), $VM.Name)) -ResourcePool (Get-VApp -Name ($_.Name)).Name -RunAsync}
+        Get-VApp -Tag $Tag | ForEach-Object { New-VM -VM $VM -Name ( -join (($_.Name.Split("P")[0]), $VM.Name)) -ResourcePool (Get-VApp -Name ($_.Name)).Name -LinkedClone -ReferenceSnapshot "SnapshotForCloning" -RunAsync }
     }
 
     if ($CreateRouters -eq $true) {
         Write-Host 'Creating the pod routers...'
         for ($i = 0; $i -lt $Pods; $i++) {
             Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod Router...'))
-            New-PodRouter -Target ( -join ($CreatedPortGroups[$i], '_Pod')) <#-WanPortGroup $WanPortGroup#> -LanPortGroup ( -join ($CreatedPortGroups[$i], '_PodNetwork')) -ErrorAction Stop | Out-Null
+            New-PodRouter -Target ( -join ($CreatedPortGroups[$i], '_Pod')) -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($CreatedPortGroups[$i], '_PodNetwork')) -ErrorAction Stop | Out-Null
         }
     }
 
@@ -76,7 +78,8 @@ function Invoke-PodClone {
                          Set-NetworkAdapter -Portgroup (Get-VDPortGroup -name ( -join ($_.Name.Split("_")[0], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null 
                      }
                 }
-                else { 
+                else {
+                    Write-Host bruh
                     Start-Sleep -Seconds 10
                 }
             }  
@@ -98,8 +101,6 @@ function Invoke-PodClone {
         Write-Host 'Creating the pod users...'
         New-PodUsers -Pods $names -Role $Role -Description $Tag | Out-Null
     }
-
-    $VMsToClone | Set-Template -ToVM -Confirm:$false | Move-VM -Destination $SourceResourcePool
     <#
         .SYNOPSIS
         Clones the given vSphere vApp a specified number of times.
@@ -202,7 +203,7 @@ function New-DevPod {
 
     # Creates the Dev Port Group, vApp, and Router
     $DevPortGroup = New-PodPortGroups -Portgroups 1 -StartPort 1300 -EndPort 1350 -AssignPortGroups $true
-    New-ResourcePool -Location $Target -Name $Name | Out-Null
+    New-VApp -Location $Target -Name $Name | Out-Null
     if ($CreateRouter -eq $true) {
         New-PodRouter -Target $Name -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($DevPortGroup[0], '_PodNetwork')) -ErrorAction Stop| Out-Null
     }
@@ -464,7 +465,7 @@ function Invoke-RvByeBye {
         [Parameter(Mandatory)]
         [String] $Tag
     )
-    Get-ResourcePool -Tag $Tag | Stop-VM
+    Get-VApp -Tag $Tag | Get-VM | Stop-VM -Confirm:$false | Out-Null
     Get-VApp -Tag $Tag | Get-VM | Remove-VM -DeletePermanently | Out-Null
     Get-Vapp -Tag $Tag | Remove-VApp -DeletePermanently | Out-Null
     Get-VDPortgroup -Tag $Tag -ErrorAction Stop | Remove-VDPortGroup -ErrorAction Stop | Out-Null
