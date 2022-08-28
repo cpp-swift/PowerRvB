@@ -79,7 +79,6 @@ function Invoke-PodClone {
                      }
                 }
                 else {
-                    Write-Host bruh
                     Start-Sleep -Seconds 10
                 }
             }  
