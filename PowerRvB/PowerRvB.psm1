@@ -12,6 +12,7 @@ function Invoke-PodClone {
         [Boolean] $AssignPortGroups,
         [Parameter(Mandatory)]
         [int] $FirstPodNumber,
+        [Boolean] $CompetitionSetup=$True,
         [Boolean] $CreateUsers,
         [String] $Role,
         [Boolean] $CreateRouters,
@@ -43,9 +44,17 @@ function Invoke-PodClone {
 
     if ($CreateRouters -eq $true) {
         Write-Host 'Creating the pod routers...'
-        for ($i = 0; $i -lt $Pods; $i++) {
-            Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod Router...'))
-            New-PodRouter -Target ( -join ($CreatedPortGroups[$i], '_Pod')) -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($CreatedPortGroups[$i], '_PodNetwork')) -ErrorAction Stop | Out-Null
+        if ($CompetitionSetup -eq $True) {
+            for ($i = 0; $i -lt $Pods; $i++) {
+                Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod Router...'))
+                New-PodRouter -Target ( -join ($CreatedPortGroups[$i], '_Pod')) -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($CreatedPortGroups[$i], '_PodNetwork')) -PFSenseTemplate '1:1NAT_PodRouter' -ErrorAction Stop | Out-Null
+            }
+        else {
+            for ($i = 0; $i -lt $Pods; $i++) {
+                Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod Router...'))
+                New-PodRouter -Target ( -join ($CreatedPortGroups[$i], '_Pod')) -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($CreatedPortGroups[$i], '_PodNetwork')) -PFSenseTemplate 'pfSense Blank' -ErrorAction Stop | Out-Null
+            }
+        }
         }
     }
 
@@ -359,7 +368,10 @@ function New-PodRouter {
         [Parameter(Mandatory = $true)]
         [String] $WanPortGroup,
         [Parameter(Mandatory = $true)]
-        [String] $LanPortGroup
+        [String] $LanPortGroup,
+        [Parameter(Mandatory = $true)]
+        [String] $PFSenseTemplate
+
     )
 
     # Creating the Router
@@ -367,7 +379,22 @@ function New-PodRouter {
     New-VM -Name $name `
         -ResourcePool (Get-Vapp -Name $Target).Name `
         -Datastore (Get-DataStore -Name Ursula) `
-        -Template (Get-Template -Name "pfSense Blank") -RunAsync | Out-Null
+        -Template (Get-Template -Name $PFSenseTemplate) | Out-Null
+
+    Get-VM -Name $name | Start-VM
+    Start-Sleep 30
+    $SSHTest = $True
+    if ($PFSenseTemplate -eq '1:1NAT_PodRouter') { 
+        while ($SSHTest) {
+                $ThirdOctet = $LanPortGroup.Substring(2, 2)
+                if ($ThirdOctet.StartsWith('0')) {
+                    $ThirdOctet = $ThirdOctet.Substring(1,1)
+                }
+                $commands = "sed 's/172.16.254/172.16.$ThirdOctet/g' /cf/conf/config.xml > tempconf.xml; cp tempconf.xml /cf/conf/config.xml; rm /tmp/config.cache; /etc/rc.reload_all start"
+                ssh "admin@172.16.254.1" $commands -ErrorAction continue
+                $SSHTest = $false
+            }
+        }
 
     # Assigning port groups to the interfaces
    
@@ -528,9 +555,9 @@ function Invoke-ConfigureVMs {
         if ($NewPortGroup) { $VM | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name ( -join ($NewPortGroup, "_PodNetwork"))) -Confirm:$false -RunAsync | Out-Null }
         if ($NumCpu) { $VM | Set-VM -NumCpu $NumCpu -Confirm:$false -RunAsync }
         if ($MemoryGB) { $VM | Set-VM -MemoryGB $MemoryGB -Confirm:$false -RunAsync }
-        if ($Name) { $VM | Set-VM -Name $Name -RunAsync -Confirm:$false}
-        if ($MemoryHotAddEnabled) {$VM | Stop-VM -Confirm:$false | Set-VM -MemoryHotAddEnabled $MemoryHotAddEnabled -Confirm:$false -RunAsync}
-        if ($CpuHotAddEnabled) {$VM | Stop-VM -Confirm:$false | Set-VM -CpuHotAddEnabled $CpuHotAddEnabled -Confirm:$false -RunAsync}
-        if ($CpuHotRemoveEnabled) { $VM | Stop-VM -Confirm:$false | Set-VM -CpuHotRemoveEnabled $CpuHotRemoveEnabled -Confirm:$false -RunAsync}
+        if ($Name) { $VM | Set-VM -Name $Name -RunAsync -Confirm:$false }
+        if ($MemoryHotAddEnabled) {$VM | Stop-VM -Confirm:$false | Set-VM -MemoryHotAddEnabled $MemoryHotAddEnabled -Confirm:$false -RunAsync }
+        if ($CpuHotAddEnabled) {$VM | Stop-VM -Confirm:$false | Set-VM -CpuHotAddEnabled $CpuHotAddEnabled -Confirm:$false -RunAsync }
+        if ($CpuHotRemoveEnabled) { $VM | Stop-VM -Confirm:$false | Set-VM -CpuHotRemoveEnabled $CpuHotRemoveEnabled -Confirm:$false -RunAsync }
     }
 }
