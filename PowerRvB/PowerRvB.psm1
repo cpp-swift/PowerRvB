@@ -42,6 +42,20 @@ function Invoke-PodClone {
         Get-VApp -Tag $Tag | ForEach-Object { New-VM -VM $VM -Name ( -join (($_.Name.Split("P")[0]), $VM.Name)) -ResourcePool (Get-VApp -Name ($_.Name)).Name -LinkedClone -ReferenceSnapshot "SnapshotForCloning" -RunAsync }
     }
 
+    $CloningCompletion = $false
+    While (!$CloningCompletion) {
+        $testNetAdapter = Get-VApp -Tag $Tag | Get-VM | Get-NetworkAdapter
+        if ($testNetAdapter.Count -eq (($VMsToClone.Count) * $Pods)) {
+            $CloningCompletion = $true
+            Write-Progress -Activity "Cloning in Progress..." -Status "percent complete: 100" -PercentComplete 100
+        } else {
+            $CloningCompletion = $false
+            $PercentComplete = [math]::Round(($testNetAdapter.Count / (($VMsToClone.Count) * $Pods)) * 100, 2)
+            Write-Progress -Activity "Cloning in Progress..." -Status "percent complete: $PercentComplete" -PercentComplete $PercentComplete
+            Start-Sleep 2
+        }
+    }
+
     if ($CreateRouters -eq $true) {
         Write-Host 'Creating the pod routers...'
         if ($CompetitionSetup -eq $True) {
@@ -49,23 +63,22 @@ function Invoke-PodClone {
                 Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod Router...'))
                 New-PodRouter -Target ( -join ($CreatedPortGroups[$i], '_Pod')) -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($CreatedPortGroups[$i], '_PodNetwork')) -PFSenseTemplate '1:1NAT_PodRouter' -ErrorAction Stop | Out-Null
             }
-        else {
+        } else {
             for ($i = 0; $i -lt $Pods; $i++) {
                 Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod Router...'))
                 New-PodRouter -Target ( -join ($CreatedPortGroups[$i], '_Pod')) -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($CreatedPortGroups[$i], '_PodNetwork')) -PFSenseTemplate 'pfSense Blank' -ErrorAction Stop | Out-Null
             }
         }
-        }
     }
 
     if ($AssignPortGroups) {
-        $CloningCompletion = $true
+        $CloningCompletion = $false
         While ($CloningCompletion) {
             $testNetAdapter = Get-VApp -Tag $Tag | Get-VM | Get-NetworkAdapter
             try {
                 if ($testNetAdapter.Count -eq (($VMsToClone.Count + 2) * $Pods)) {
                     #Set Variables
-                    $CloningCompletion = $false
+                    $CloningCompletion = $true
                     $Routers = Get-VApp -Tag $Tag -ErrorAction Stop | Get-VM | Where-Object -Property Name -Like '*PodRouter*'
                     $VMs = Get-VApp -Tag $Tag -ErrorAction Stop | Get-VM | Where-Object -Property Name -NotLike '*PodRouter*'
                     
@@ -92,7 +105,7 @@ function Invoke-PodClone {
                 }
             }  
             catch {
-                $CloningCompletion = $true
+                $CloningCompletion = $false
                 Start-Sleep -Seconds 10
                 Write-Host "Cloning is not complete... Please do not cancel (Justin). If you think you can cancel it because you are not Justin (Dylan) please do not cancel it."
             }   
@@ -213,7 +226,7 @@ function New-DevPod {
     $DevPortGroup = New-PodPortGroups -Portgroups 1 -StartPort 1300 -EndPort 1350 -AssignPortGroups $true
     New-VApp -Location $Target -Name $Name | Out-Null
     if ($CreateRouter -eq $true) {
-        New-PodRouter -Target $Name -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($DevPortGroup[0], '_PodNetwork')) -ErrorAction Stop| Out-Null
+        New-PodRouter -Target $Name -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($DevPortGroup[0], '_PodNetwork')) -PFSenseTemplate "pfSense Blank" -ErrorAction Stop| Out-Null
     }
 
     $Templates = Get-Template | Sort-Object
@@ -228,7 +241,7 @@ function New-DevPod {
     if ($Boxes) {
         for ($i = 0; $i -ile $Boxes.Count; $i++) {
             New-VM -Name $Templates.Get($Boxes[$i].ToString()).Name `
-                -ResourcePool (Get-ResourcePool -Name $Name) `
+                -ResourcePool (Get-VApp -Name ($Name)).Name `
                 -Datastore (Get-DataStore -Name Ursula) `
                 -Template $Templates.get($Boxes[$i].ToString()) -RunAsync -ErrorAction Stop | Out-Null
         }
@@ -237,7 +250,7 @@ function New-DevPod {
         $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
     
         for ($i = 0; $i -lt $Boxes.Count; $i++) {
-            Get-ResourcePool -Name $Name -ErrorAction Stop | Get-VM | Where-Object -Property Name -NotLike '*PodRouter*' | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortGroup -Name ( -join ($DevPortGroup[0], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null
+            Get-ResourcePool (Get-VApp -Name ($Name)).Name -ErrorAction Stop | Get-VM | Where-Object -Property Name -NotLike '*PodRouter*' | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortGroup -Name ( -join ($DevPortGroup[0], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null
         }
     }
 
@@ -395,6 +408,7 @@ function New-PodRouter {
                 $SSHTest = $false
             }
         }
+    
 
     # Assigning port groups to the interfaces
    
