@@ -14,6 +14,7 @@ function Invoke-PodClone {
         [int] $FirstPodNumber,
         [Boolean] $CompetitionSetup=$True,
         [Boolean] $CreateUsers,
+        [String] $Domain,
         [String] $Role,
         [Boolean] $CreateRouters,
         [String] $WanPortGroup='0010_DefaultNetwork'
@@ -36,7 +37,12 @@ function Invoke-PodClone {
 
     $VMsToClone = Get-ResourcePool -Name $SourceResourcePool | Get-VM
 
-    $VMsToClone | ForEach-Object { if (!(Get-Snapshot -VM $_ | Where-Object name -eq SnapshotForCloning)) {New-Snapshot -VM $_ -Name SnapshotForCloning} }
+    $VMsToClone | ForEach-Object {
+        if (Get-Snapshot -VM $_ | Where-Object name -eq SnapshotForCloning) {
+            $_ | Get-Snapshot -Name SnapshotForCloning | Remove-Snapshot -Confirm:$false
+        }
+        New-Snapshot -VM $_ -Name SnapshotForCloning
+    }
 
     foreach ($VM in $VMsToClone) {
         Get-VApp -Tag $Tag | ForEach-Object { New-VM -VM $VM -Name ( -join (($_.Name.Split("P")[0]), $VM.Name)) -ResourcePool (Get-VApp -Name ($_.Name)).Name -LinkedClone -ReferenceSnapshot "SnapshotForCloning" -RunAsync }
@@ -66,50 +72,33 @@ function Invoke-PodClone {
         } else {
             for ($i = 0; $i -lt $Pods; $i++) {
                 Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod Router...'))
-                New-PodRouter -Target ( -join ($CreatedPortGroups[$i], '_Pod')) -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($CreatedPortGroups[$i], '_PodNetwork')) -PFSenseTemplate 'pfSense Blank' -ErrorAction Stop | Out-Null
+                New-PodRouter -Target ( -join ($CreatedPortGroups[$i], '_Pod')) -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($CreatedPortGroups[$i], '_PodNetwork')) -PFSenseTemplate 'pfSense Blank' | Out-Null
             }
         }
     }
 
     if ($AssignPortGroups) {
-        $CloningCompletion = $false
-        While ($CloningCompletion) {
-            $testNetAdapter = Get-VApp -Tag $Tag | Get-VM | Get-NetworkAdapter
-            try {
-                if ($testNetAdapter.Count -eq (($VMsToClone.Count + 2) * $Pods)) {
-                    #Set Variables
-                    $CloningCompletion = $true
-                    $Routers = Get-VApp -Tag $Tag -ErrorAction Stop | Get-VM | Where-Object -Property Name -Like '*PodRouter*'
-                    $VMs = Get-VApp -Tag $Tag -ErrorAction Stop | Get-VM | Where-Object -Property Name -NotLike '*PodRouter*'
+        #Set Variables
+        $CloningCompletion = $true
+        $Routers = Get-VApp -Tag $Tag -ErrorAction Stop | Get-VM | Where-Object -Property Name -Like '*PodRouter*'
+        $VMs = Get-VApp -Tag $Tag -ErrorAction Stop | Get-VM | Where-Object -Property Name -NotLike '*PodRouter*'
                     
-                    #Set VM Port Groups
-                    if ($VMs) {
-                        $VMs | 
-                            ForEach-Object { 
-                                Get-NetworkAdapter -VM $_ -Name "Network adapter 1" -ErrorAction Stop | 
-                                 Set-NetworkAdapter -Portgroup (Get-VDPortGroup -name ( -join ($_.Name.Split("_")[0], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null 
-                            }
-                    }
-
-                    #Set Router Port Groups
-                    $Routers | 
-                     ForEach-Object {
-                        Get-NetworkAdapter -VM $_ -Name "Network adapter 1" -ErrorAction Stop | 
-                         Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $WanPortGroup) -Confirm:$false -RunAsync | Out-Null 
-                        Get-NetworkAdapter -VM $_ -Name "Network adapter 2" -ErrorAction Stop | 
-                         Set-NetworkAdapter -Portgroup (Get-VDPortGroup -name ( -join ($_.Name.Split("_")[0], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null 
-                     }
+        #Set VM Port Groups
+        if ($VMs) {
+            $VMs | 
+                ForEach-Object { 
+                    Get-NetworkAdapter -VM $_ -Name "Network adapter 1" -ErrorAction Stop | 
+                        Set-NetworkAdapter -Portgroup (Get-VDPortGroup -name ( -join ($_.Name.Split("_")[0], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null 
                 }
-                else {
-                    Start-Sleep -Seconds 10
-                }
-            }  
-            catch {
-                $CloningCompletion = $false
-                Start-Sleep -Seconds 10
-                Write-Host "Cloning is not complete... Please do not cancel (Justin). If you think you can cancel it because you are not Justin (Dylan) please do not cancel it."
-            }   
         }
+        #Set Router Port Groups
+        $Routers | 
+            ForEach-Object {
+            Get-NetworkAdapter -VM $_ -Name "Network adapter 1" -ErrorAction Stop | 
+                Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $WanPortGroup) -Confirm:$false -RunAsync | Out-Null 
+            Get-NetworkAdapter -VM $_ -Name "Network adapter 2" -ErrorAction Stop | 
+                Set-NetworkAdapter -Portgroup (Get-VDPortGroup -name ( -join ($_.Name.Split("_")[0], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null 
+            }
     }
     
     
@@ -120,7 +109,7 @@ function Invoke-PodClone {
             $names += ( -join ($name, '_Pod'))
         }
         Write-Host 'Creating the pod users...'
-        New-PodUsers -Pods $names -Role $Role -Description $Tag | Out-Null
+        New-PodUsers -Pods $names -Role $Role -Description $Tag -Domain $Domain | Out-Null
     }
     <#
         .SYNOPSIS
@@ -395,9 +384,10 @@ function New-PodRouter {
         -Template (Get-Template -Name $PFSenseTemplate) | Out-Null
 
     Get-VM -Name $name | Start-VM
-    Start-Sleep 30
+    
     $SSHTest = $True
-    if ($PFSenseTemplate -eq '1:1NAT_PodRouter') { 
+    if ($PFSenseTemplate -eq '1:1NAT_PodRouter') {
+        Start-Sleep 30 
         while ($SSHTest) {
                 $ThirdOctet = $LanPortGroup.Substring(2, 2)
                 if ($ThirdOctet.StartsWith('0')) {
@@ -450,7 +440,9 @@ function New-PodUsers {
         [Parameter(Mandatory = $true)]
         [String] $Role,
         [Parameter(Mandatory = $true)]
-        [String] $Description
+        [String] $Description,
+        [Parameter(Mandatory = $true)]
+        [String] $Domain
     )
 
     # Creating the User Accounts
@@ -461,11 +453,11 @@ function New-PodUsers {
         $Name = ( -join ($Pod, 'User'))
         $SecurePassword = ConvertTo-SecureString -AsPlainText $Password -Force
         Write-Host 'Creating user' $Name
-        New-ADUser -Name $Name -ChangePasswordAtLogon $false -AccountPassword $SecurePassword -Enabled $true -Description $Description -UserPrincipalName (-join ($Name, '@sdc.cpp'))| Out-Null
+        New-ADUser -Name $Name -ChangePasswordAtLogon $false -AccountPassword $SecurePassword -Enabled $true -Description $Description -UserPrincipalName (-join ($Name, '@', $Domain))| Out-Null
         Add-ADGroupMember -Identity 'RvB Competitors' -Members $Name
 
         # Creating the Roles Assignments on vSphere
-        New-VIPermission -Role (Get-VIRole -Name $Role -ErrorAction Stop) -Entity (Get-VApp -Name $Pod) -Principal ('SDC\' + $Name) | Out-Null
+        New-VIPermission -Role (Get-VIRole -Name $Role -ErrorAction Stop) -Entity (Get-VApp -Name $Pod) -Principal ($Domain.Split(".")[0] + '\' + $Name) | Out-Null
         
         #Append User to CSV
         $out = "$Name,$Password"
