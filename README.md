@@ -90,7 +90,7 @@ Using the template from Step 4 and **Invoke-PodClone**, you can create a specifi
 ```powershell
 PS> Invoke-PodClone -SourceResourcePool <ResourcePool> -Target <ResourcePool> -Pods <number> -Tag <Tag> -FirstPodNumber <number> -AssignPortGroups <$true|$false> -CreateUsers <$true|$false> -Role <vSphereRole> -CreateRouters <$true|$false> -WanPortGroup <PortGroup>
 
-PS> Invoke-PodClone -SourceResourcePool DevPod -Target 02-07_Evan -Pods 20 -Tag 'RvB Tag' -AssignPortGroups $True -FirstPodNumber 1230 -AssignPortGroups $true -CreateUsers $true -Role 01_RvBDirector -CreateRouters $true
+PS> Invoke-PodClone -SourceResourcePool DevPod -Target 02-07_Evan -Pods 20 -Tag 'RvB Tag' -AssignPortGroups $True -FirstPodNumber 1230 -CreateUsers $true -Role 01_RvBDirector -CreateRouters $true
 ```
 
 <aside>
