@@ -171,7 +171,7 @@ function Get-RandomPassword {
     $uCharSet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     $lCharSet = "abcdefghijklmnopqrstuvwxyz"
     $nCharSet = "0123456789"
-    $sCharSet = "/*-+,!?=()@;:._"
+    $sCharSet = "_!@#$"
     $charSet = ""
     if ($upper -gt 0) { $charSet += $uCharSet }
     if ($lower -gt 0) { $charSet += $lCharSet }
