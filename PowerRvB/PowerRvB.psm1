@@ -14,7 +14,7 @@ function Invoke-PodClone {
         [int] $FirstPodNumber,
         [Boolean] $CompetitionSetup=$True,
         [Boolean] $CreateUsers,
-        [String] $Domain,
+        [String] $Domain='sdc.cpp',
         [String] $Role,
         [Boolean] $CreateRouters,
         [String] $WanPortGroup='0010_DefaultNetwork'
@@ -200,6 +200,7 @@ function Get-RandomPassword {
     return $password
 }
 
+#Create a new Pod for Development
 function New-DevPod {
 
     param(
@@ -274,6 +275,7 @@ function New-DevPod {
     #>
 }
 
+#Create Port Groups
 function New-PodPortGroups {
 
     param(
