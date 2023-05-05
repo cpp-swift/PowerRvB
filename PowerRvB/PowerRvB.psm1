@@ -48,20 +48,6 @@ function Invoke-PodClone {
         Get-VApp -Tag $Tag | ForEach-Object { New-VM -VM $VM -Name ( -join (($_.Name.Split("P")[0]), $VM.Name)) -ResourcePool (Get-VApp -Name ($_.Name)).Name -LinkedClone -ReferenceSnapshot "SnapshotForCloning" -RunAsync }
     }
 
-    $CloningCompletion = $false
-    While (!$CloningCompletion) {
-        $testNetAdapter = Get-VApp -Tag $Tag | Get-VM | Get-NetworkAdapter
-        if ($testNetAdapter.Count -eq (($VMsToClone.Count) * $Pods)) {
-            $CloningCompletion = $true
-            Write-Progress -Activity "Cloning in Progress..." -Status "percent complete: 100" -PercentComplete 100
-        } else {
-            $CloningCompletion = $false
-            $PercentComplete = [math]::Round(($testNetAdapter.Count / (($VMsToClone.Count) * $Pods)) * 100, 2)
-            Write-Progress -Activity "Cloning in Progress..." -Status "percent complete: $PercentComplete" -PercentComplete $PercentComplete
-            Start-Sleep 2
-        }
-    }
-
     if ($CreateRouters -eq $true) {
         Write-Host 'Creating the pod routers...'
         if ($CompetitionSetup -eq $True) {
@@ -74,6 +60,20 @@ function Invoke-PodClone {
                 Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod Router...'))
                 New-PodRouter -Target ( -join ($CreatedPortGroups[$i], '_Pod')) -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($CreatedPortGroups[$i], '_PodNetwork')) -PFSenseTemplate 'pfSense Blank' | Out-Null
             }
+        }
+    }
+
+    $CloningCompletion = $false
+    While (!$CloningCompletion) {
+        $testNetAdapter = Get-VApp -Tag $Tag | Get-VM | Get-NetworkAdapter
+        if ($testNetAdapter.Count -eq (($VMsToClone.Count) * $Pods + ($Pods * 2))) {
+            $CloningCompletion = $true
+            Write-Progress -Activity "Cloning in Progress..." -Status "percent complete: 100" -PercentComplete 100
+        } else {
+            $CloningCompletion = $false
+            $PercentComplete = [math]::Round(($testNetAdapter.Count / ((($VMsToClone.Count) * $Pods + ($Pods * 2)) * 100)), 2)
+            Write-Progress -Activity "Cloning in Progress..." -Status "percent complete: $PercentComplete" -PercentComplete $PercentComplete
+            Start-Sleep 2
         }
     }
 
@@ -91,17 +91,29 @@ function Invoke-PodClone {
                         Set-NetworkAdapter -Portgroup (Get-VDPortGroup -name ( -join ($_.Name.Split("_")[0], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null 
                 }
         }
-        #Set Router Port Groups
+        #Configure Routers
         $Routers | 
             ForEach-Object {
+
+            #Set Port Groups
             Get-NetworkAdapter -VM $_ -Name "Network adapter 1" -ErrorAction Stop | 
-                Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $WanPortGroup) -Confirm:$false -RunAsync | Out-Null 
+                Set-NetworkAdapter -Portgroup (Get-VDPortgroup -Name $WanPortGroup) -Confirm:$false | Out-Null 
             Get-NetworkAdapter -VM $_ -Name "Network adapter 2" -ErrorAction Stop | 
-                Set-NetworkAdapter -Portgroup (Get-VDPortGroup -name ( -join ($_.Name.Split("_")[0], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null 
+                Set-NetworkAdapter -Portgroup (Get-VDPortGroup -name ( -join ($_.Name.Split("_")[0], '_PodNetwork'))) -Confirm:$false | Out-Null
+            
+            #Set Router IP Addresses
+            Start-VM -VM $_ -Confirm:$false | Out-Null
+            while ((Test-NetConnection 172.16.254.1 -Port 22 | Select-Object -ExpandProperty TcpTestSucceeded) -ne "True") { Continue }
+            Start-Sleep 5
+            Write-Host ($_.Name.Split("_")[0])
+            Set-PodRouter -ThirdOctet ($_.Name.Split("_")[0])
+            
+
             }
     }
     
-    
+    #Snapshot new VMs
+    Get-VApp -Tag $Tag | Get-VM | ForEach-Object { New-Snapshot -VM $_ -Name 'Base' -Confirm:$false -RunAsync }
     
     $names = @()
     if ($CreateUsers -eq $true) {
@@ -214,9 +226,9 @@ function New-DevPod {
 
     # Creates the Dev Port Group, vApp, and Router
     $DevPortGroup = New-PodPortGroups -Portgroups 1 -StartPort 1300 -EndPort 1350 -AssignPortGroups $true
-    New-VApp -Location $Target -Name $Name | Out-Null
+    New-ResourcePool -Location $Target -Name $Name | Out-Null
     if ($CreateRouter -eq $true) {
-        New-PodRouter -Target $Name -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($DevPortGroup[0], '_PodNetwork')) -PFSenseTemplate "pfSense Blank" -ErrorAction Stop| Out-Null
+        New-PodRouter -Target $Name -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($DevPortGroup[0], '_PodNetwork')) -PFSenseTemplate "pfSense Blank" -IsDevPod $true -ErrorAction Stop| Out-Null
     }
 
     $Templates = Get-Template | Sort-Object
@@ -231,8 +243,8 @@ function New-DevPod {
     if ($Boxes) {
         for ($i = 0; $i -ile $Boxes.Count; $i++) {
             New-VM -Name $Templates.Get($Boxes[$i].ToString()).Name `
-                -ResourcePool (Get-VApp -Name ($Name)).Name `
-                -Datastore (Get-DataStore -Name Ursula) `
+                -ResourcePool $Name `
+                -Datastore Ursula `
                 -Template $Templates.get($Boxes[$i].ToString()) -RunAsync -ErrorAction Stop | Out-Null
         }
         
@@ -240,7 +252,7 @@ function New-DevPod {
         $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
     
         for ($i = 0; $i -lt $Boxes.Count; $i++) {
-            Get-ResourcePool (Get-VApp -Name ($Name)).Name -ErrorAction Stop | Get-VM | Where-Object -Property Name -NotLike '*PodRouter*' | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortGroup -Name ( -join ($DevPortGroup[0], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null
+            Get-ResourcePool $Name -ErrorAction Stop | Get-VM | Where-Object -Property Name -NotLike '*PodRouter*' | Get-NetworkAdapter -Name "Network adapter 1" | Set-NetworkAdapter -Portgroup (Get-VDPortGroup -Name ( -join ($DevPortGroup[0], '_PodNetwork'))) -Confirm:$false -RunAsync | Out-Null
         }
     }
 
@@ -374,33 +386,26 @@ function New-PodRouter {
         [Parameter(Mandatory = $true)]
         [String] $LanPortGroup,
         [Parameter(Mandatory = $true)]
-        [String] $PFSenseTemplate
+        [String] $PFSenseTemplate,
+        [Parameter(Mandatory = $false)]
+        [Boolean] $IsDevPod = $false
 
     )
 
     # Creating the Router
-    $name = ( -join ($LanPortGroup.Substring(0, 4), '_PodRouter'))
-    New-VM -Name $name `
-        -ResourcePool (Get-Vapp -Name $Target).Name `
-        -Datastore (Get-DataStore -Name Ursula) `
-        -Template (Get-Template -Name $PFSenseTemplate) | Out-Null
-
-    Get-VM -Name $name | Start-VM
-    
-    $SSHTest = $True
-    if ($PFSenseTemplate -eq '1:1NAT_PodRouter') {
-        Start-Sleep 30 
-        while ($SSHTest) {
-                $ThirdOctet = $LanPortGroup.Substring(2, 2)
-                if ($ThirdOctet.StartsWith('0')) {
-                    $ThirdOctet = $ThirdOctet.Substring(1,1)
-                }
-                $commands = "sed 's/172.16.254/172.16.$ThirdOctet/g' /cf/conf/config.xml > tempconf.xml; cp tempconf.xml /cf/conf/config.xml; rm /tmp/config.cache; /etc/rc.reload_all start"
-                ssh "admin@172.16.254.1" $commands -ErrorAction continue
-                $SSHTest = $false
-            }
-        }
-    
+    if (!$IsDevPod) {
+        $name = ( -join ($LanPortGroup.Substring(0, 4), '_PodRouter'))
+        New-VM -Name $name `
+            -ResourcePool (Get-Vapp -Name $Target).Name `
+            -Datastore Ursula `
+            -Template (Get-Template -Name $PFSenseTemplate) -RunAsync | Out-Null
+    } else {
+        $name = ( -join ($LanPortGroup.Substring(0, 4), '_DevPodRouter'))
+        New-VM -Name $name `
+            -ResourcePool $Target `
+            -Datastore Ursula `
+            -Template (Get-Template -Name $PFSenseTemplate) -RunAsync | Out-Null
+    }
 
     # Assigning port groups to the interfaces
    
@@ -433,6 +438,20 @@ function New-PodRouter {
         PowerRvB's Github Repository: https://github.com/cpp-swift/PowerRvB
     #>
 } 
+
+function Set-PodRouter {
+    param(
+        [Parameter(Mandatory = $true)]
+        [String] $ThirdOctet
+    )
+        $ThirdOctet = $ThirdOctet.Substring(2, 2)
+        if ($ThirdOctet.StartsWith('0')) {
+            $ThirdOctet = $ThirdOctet.Substring(1,1)
+        }
+        $commands = "sed 's/172.16.254/172.16.$ThirdOctet/g' /cf/conf/config.xml > tempconf.xml; cp tempconf.xml /cf/conf/config.xml; rm /tmp/config.cache; /etc/rc.reload_all start"
+        ssh "admin@172.16.254.1" $commands -ErrorAction continue
+        
+}
 
 function New-PodUsers {
 
