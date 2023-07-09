@@ -468,7 +468,7 @@ function New-PodUsers {
 
     # Creating the User Accounts
     Import-Module ActiveDirectory
-    $file = ( -join ("$env:USERPROFILE\Desktop\", $Description , "Users.csv"))
+    $file = ( -join ("$env:USERPROFILE\Desktop\", $Description , "Users.txt"))
     ForEach ($Pod in $Pods) {
         $Password = Get-RandomPassword 12 1 1 1 1
         $Name = ( -join ($Pod, 'User'))
@@ -484,23 +484,23 @@ function New-PodUsers {
         $out = "$Name,$Password"
         $out | Out-File $file -Append -Force
 
-        if ($PSVersionTable.PSVersion.Major -gt 6) {
-            $headers = @{
-                'accept' = 'application/json'
-                'Content-Type' = 'multipart/form-data'
-            }
+    }
 
-            $form = @{
-                file = Get-Item -Path $file
-                maxDownloads = '1'
-                autoDelete = 'true'
-            }
-
-            $Result = Invoke-RestMethod -Method Post -Uri https://file.io/ -Headers $headers -Form $form
-
-            Write-Host "Link for Credentials:" $Result.link -ForegroundColor Green
+    if ($PSVersionTable.PSVersion.Major -gt 6) {
+        $headers = @{
+            'accept' = 'application/json'
+            'Content-Type' = 'multipart/form-data'
         }
 
+        $form = @{
+            file = Get-Item -Path $file
+            maxDownloads = '1'
+            autoDelete = 'true'
+        }
+
+        $Result = Invoke-RestMethod -Method Post -Uri https://file.io/ -Headers $headers -Form $form
+
+        Write-Host "Link for Credentials:" $Result.link -ForegroundColor Green
     }
 
     <#
