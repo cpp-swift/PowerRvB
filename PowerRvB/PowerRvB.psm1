@@ -483,6 +483,24 @@ function New-PodUsers {
         #Append User to CSV
         $out = "$Name,$Password"
         $out | Out-File $file -Append -Force
+
+        if ($PSVersionTable.PSVersion.Major -gt 6) {
+            $headers = @{
+                'accept' = 'application/json'
+                'Content-Type' = 'multipart/form-data'
+            }
+
+            $form = @{
+                file = Get-Item -Path $file
+                maxDownloads = '1'
+                autoDelete = 'true'
+            }
+
+            $Result = Invoke-RestMethod -Method Post -Uri https://file.io/ -Headers $headers -Form $form
+
+            Write-Host "Link for Credentials:" $Result.link -ForegroundColor Green
+        }
+
     }
 
     <#
