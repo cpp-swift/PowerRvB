@@ -20,6 +20,8 @@ function Invoke-PodClone {
         [String] $WanPortGroup='0010_DefaultNetwork'
     )
 
+	$cred = Get-Credential
+
     try {
         Get-Tag -Name $Tag -ErrorAction Stop| Out-Null
     }
@@ -38,8 +40,10 @@ function Invoke-PodClone {
     if ($CreateRouters -eq $true) {
         Write-Host 'Creating the pod routers...'
         if ($CompetitionSetup -eq $True) {
+            
        #         Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod Router...'))
-            New-PodRouter -Target $SourceResourcePool -WanPortGroup $WanPortGroup -PFSenseTemplate '1:1NAT_PodRouter' -ErrorAction Stop | Out-Null
+                New-PodRouter -Target $SourceResourcePool -WanPortGroup $WanPortGroup -PFSenseTemplate '1:1NAT_PodRouter' -ErrorAction Stop | Out-Null
+  
         } else {
             for ($i = 0; $i -lt $Pods; $i++) {
                 Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod Router...'))
@@ -62,20 +66,8 @@ function Invoke-PodClone {
     }
 
     
-
-    $CloningCompletion = $false
-    While (!$CloningCompletion) {
-        $testNetAdapter = Get-VApp -Tag $Tag | Get-VM | Get-NetworkAdapter
-        if ($testNetAdapter.Count -eq (($VMsToClone.Count) * $Pods + ($Pods * 2))) {
-            $CloningCompletion = $true
-            Write-Progress -Activity "Cloning in Progress..." -Status "percent complete: 100" -PercentComplete 100
-        } else {
-            $CloningCompletion = $false
-            $PercentComplete = [math]::Round(($testNetAdapter.Count / ((($VMsToClone.Count) * $Pods + ($Pods * 2)) * 100)), 2)
-            Write-Progress -Activity "Cloning in Progress..." -Status "percent complete: $PercentComplete" -PercentComplete $PercentComplete
-            Start-Sleep 2
-        }
-    }
+	$Pause = Read-Host "Wait for Everything to Clone"
+    
 
     if ($AssignPortGroups) {
         #Set Variables
@@ -110,9 +102,11 @@ function Invoke-PodClone {
 
             }
 
-            $cred = Get-Credential
+            Get-VApp -Tag $tag | Get-VM -Name *PodRouter | Start-VM
 
-            Get-VApp -Tag BootcampWeek3 | Get-VM -Name *PodRouter | Select -ExpandProperty name | %{ $oct = $_.split("_")[0].substring(2); Invoke-VMScript -VM $_ -ScriptText "sed 's/172.16.254/172.16.$Oct/g' /cf/conf/config.xml > tempconf.xml; cp tempconf.xml /cf/conf/config.xml; rm /tmp/config.cache; /etc/rc.reload_all start" -GuestCredential $cred -ScriptType Bash}
+		Start-Sleep 60
+
+            Get-VApp -Tag $tag | Get-VM -Name *PodRouter | Select -ExpandProperty name | %{ $oct = $_.split("_")[0].substring(2); Invoke-VMScript -VM $_ -ScriptText "sed 's/172.16.254/172.16.$Oct/g' /cf/conf/config.xml > tempconf.xml; cp tempconf.xml /cf/conf/config.xml; rm /tmp/config.cache; /etc/rc.reload_all start" -GuestCredential $cred -ScriptType Bash}
             
     }
     
