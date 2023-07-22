@@ -38,10 +38,8 @@ function Invoke-PodClone {
     if ($CreateRouters -eq $true) {
         Write-Host 'Creating the pod routers...'
         if ($CompetitionSetup -eq $True) {
-            for ($i = 0; $i -lt $Pods; $i++) {
        #         Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod Router...'))
-                New-PodRouter -Target $SourceResourcePool -WanPortGroup $WanPortGroup -PFSenseTemplate '1:1NAT_PodRouter' -ErrorAction Stop | Out-Null
-            }
+            New-PodRouter -Target $SourceResourcePool -WanPortGroup $WanPortGroup -PFSenseTemplate '1:1NAT_PodRouter' -ErrorAction Stop | Out-Null
         } else {
             for ($i = 0; $i -lt $Pods; $i++) {
                 Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod Router...'))
