@@ -35,6 +35,21 @@ function Invoke-PodClone {
         New-VApp -Name ( -join ($CreatedPortGroups[$i], '_Pod')) -Location (Get-ResourcePool -Name $Target -ErrorAction Stop) -ErrorAction Stop | New-TagAssignment -Tag $Tag | Out-Null
     }
 
+    if ($CreateRouters -eq $true) {
+        Write-Host 'Creating the pod routers...'
+        if ($CompetitionSetup -eq $True) {
+            for ($i = 0; $i -lt $Pods; $i++) {
+       #         Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod Router...'))
+                New-PodRouter -Target $SourceResourcePool -WanPortGroup $WanPortGroup -PFSenseTemplate '1:1NAT_PodRouter' -ErrorAction Stop | Out-Null
+            }
+        } else {
+            for ($i = 0; $i -lt $Pods; $i++) {
+                Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod Router...'))
+                New-PodRouter -Target ( -join ($CreatedPortGroups[$i], '_Pod')) -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($CreatedPortGroups[$i], '_PodNetwork')) -PFSenseTemplate 'pfSense Blank' | Out-Null
+            }
+        }
+    }
+
     $VMsToClone = Get-ResourcePool -Name $SourceResourcePool | Get-VM
 
     $VMsToClone | ForEach-Object {
@@ -48,20 +63,7 @@ function Invoke-PodClone {
         Get-VApp -Tag $Tag | ForEach-Object { New-VM -VM $VM -Name ( -join (($_.Name.Split("P")[0]), $VM.Name)) -ResourcePool (Get-VApp -Name ($_.Name)).Name -LinkedClone -ReferenceSnapshot "SnapshotForCloning" -RunAsync }
     }
 
-    if ($CreateRouters -eq $true) {
-        Write-Host 'Creating the pod routers...'
-        if ($CompetitionSetup -eq $True) {
-            for ($i = 0; $i -lt $Pods; $i++) {
-                Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod Router...'))
-                New-PodRouter -Target ( -join ($CreatedPortGroups[$i], '_Pod')) -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($CreatedPortGroups[$i], '_PodNetwork')) -PFSenseTemplate '1:1NAT_PodRouter' -ErrorAction Stop | Out-Null
-            }
-        } else {
-            for ($i = 0; $i -lt $Pods; $i++) {
-                Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod Router...'))
-                New-PodRouter -Target ( -join ($CreatedPortGroups[$i], '_Pod')) -WanPortGroup $WanPortGroup -LanPortGroup ( -join ($CreatedPortGroups[$i], '_PodNetwork')) -PFSenseTemplate 'pfSense Blank' | Out-Null
-            }
-        }
-    }
+    
 
     $CloningCompletion = $false
     While (!$CloningCompletion) {
@@ -102,14 +104,18 @@ function Invoke-PodClone {
                 Set-NetworkAdapter -Portgroup (Get-VDPortGroup -name ( -join ($_.Name.Split("_")[0], '_PodNetwork'))) -Confirm:$false | Out-Null
             
             #Set Router IP Addresses
-            Start-VM -VM $_ -Confirm:$false | Out-Null
-            while ((Test-NetConnection 172.16.254.1 -Port 22 | Select-Object -ExpandProperty TcpTestSucceeded) -ne "True") { Continue }
-            Start-Sleep 5
-            Write-Host ($_.Name.Split("_")[0])
-            Set-PodRouter -ThirdOctet ($_.Name.Split("_")[0])
-            
+            #Start-VM -VM $_ -Confirm:$false | Out-Null
+            #while ((Test-NetConnection 172.16.254.1 -Port 22 | Select-Object -ExpandProperty TcpTestSucceeded) -ne "True") { Continue }
+            #Start-Sleep 5
+            #Write-Host ($_.Name.Split("_")[0])
+            #Set-PodRouter -ThirdOctet ($_.Name.Split("_")[0])
 
             }
+
+            $cred = Get-Credential
+
+            Get-VApp -Tag BootcampWeek3 | Get-VM -Name *PodRouter | Select -ExpandProperty name | %{ $oct = $_.split("_")[0].substring(2); Invoke-VMScript -VM $_ -ScriptText "sed 's/172.16.254/172.16.$Oct/g' /cf/conf/config.xml > tempconf.xml; cp tempconf.xml /cf/conf/config.xml; rm /tmp/config.cache; /etc/rc.reload_all start" -GuestCredential $cred -ScriptType Bash}
+            
     }
     
     #Snapshot new VMs
@@ -383,7 +389,6 @@ function New-PodRouter {
         [String] $Target,
         [Parameter(Mandatory = $true)]
         [String] $WanPortGroup,
-        [Parameter(Mandatory = $true)]
         [String] $LanPortGroup,
         [Parameter(Mandatory = $true)]
         [String] $PFSenseTemplate,
@@ -394,9 +399,9 @@ function New-PodRouter {
 
     # Creating the Router
     if (!$IsDevPod) {
-        $name = ( -join ($LanPortGroup.Substring(0, 4), '_PodRouter'))
+        $name = 'PodRouter'
         New-VM -Name $name `
-            -ResourcePool (Get-Vapp -Name $Target).Name `
+            -ResourcePool $Target `
             -Datastore Ursula `
             -Template (Get-Template -Name $PFSenseTemplate) -RunAsync | Out-Null
     } else {
