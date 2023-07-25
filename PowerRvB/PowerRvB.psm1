@@ -106,7 +106,7 @@ function Invoke-PodClone {
 
 		Start-Sleep 60
 
-            Get-VApp -Tag $tag | Get-VM -Name *PodRouter | Select -ExpandProperty name | %{ $oct = $_.split("_")[0].substring(2); Invoke-VMScript -VM $_ -ScriptText "sed 's/172.16.254/172.16.$Oct/g' /cf/conf/config.xml > tempconf.xml; cp tempconf.xml /cf/conf/config.xml; rm /tmp/config.cache; /etc/rc.reload_all start" -GuestCredential $cred -ScriptType Bash}
+            Get-VApp -Tag $tag | Get-VM -Name *PodRouter | Select -ExpandProperty name | %{ $oct = $_.split("_")[0].substring(2); Invoke-VMScript -VM $_ -ScriptText "sed 's/172.16.254/172.16.$Oct/g' /cf/conf/config.xml > tempconf.xml; cp tempconf.xml /cf/conf/config.xml; rm /tmp/config.cache; /etc/rc.reload_all start" -GuestCredential $cred -ScriptType Bash -RunAsync}
             
     }
     
