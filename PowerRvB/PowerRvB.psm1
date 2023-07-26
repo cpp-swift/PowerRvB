@@ -40,9 +40,7 @@ function Invoke-PodClone {
     if ($CreateRouters -eq $true) {
         Write-Host 'Creating the pod routers...'
         if ($CompetitionSetup -eq $True) {
-            
-       #         Write-Host 'Creating' ( -join ($CreatedPortGroups[$i], '_Pod Router...'))
-                New-PodRouter -Target $SourceResourcePool -WanPortGroup $WanPortGroup -PFSenseTemplate '1:1NAT_PodRouter' -ErrorAction Stop | Out-Null
+            New-PodRouter -Target $SourceResourcePool -WanPortGroup $WanPortGroup -PFSenseTemplate '1:1NAT_PodRouter' -ErrorAction Stop | Out-Null
   
         } else {
             for ($i = 0; $i -lt $Pods; $i++) {
@@ -61,13 +59,11 @@ function Invoke-PodClone {
         New-Snapshot -VM $_ -Name SnapshotForCloning
     }
 
-    foreach ($VM in $VMsToClone) {
+    $Tasks = foreach ($VM in $VMsToClone) {
         Get-VApp -Tag $Tag | ForEach-Object { New-VM -VM $VM -Name ( -join (($_.Name.Split("P")[0]), $VM.Name)) -ResourcePool (Get-VApp -Name ($_.Name)).Name -LinkedClone -ReferenceSnapshot "SnapshotForCloning" -RunAsync }
     }
 
-    
-	$Pause = Read-Host "Wait for Everything to Clone"
-    
+    Wait-Task -Task $Tasks -ErrorAction Stop
 
     if ($AssignPortGroups) {
         #Set Variables
@@ -102,11 +98,19 @@ function Invoke-PodClone {
 
             }
 
-            Get-VApp -Tag $tag | Get-VM -Name *PodRouter | Start-VM
+            $tasks = Get-VApp -Tag $tag | Get-VM -Name *PodRouter | Start-VM -RunAsync
 
-		Start-Sleep 60
+            Wait-Task -Task $tasks -ErrorAction Stop
 
-            Get-VApp -Tag $tag | Get-VM -Name *PodRouter | Select -ExpandProperty name | %{ $oct = $_.split("_")[0].substring(2); Invoke-VMScript -VM $_ -ScriptText "sed 's/172.16.254/172.16.$Oct/g' /cf/conf/config.xml > tempconf.xml; cp tempconf.xml /cf/conf/config.xml; rm /tmp/config.cache; /etc/rc.reload_all start" -GuestCredential $cred -ScriptType Bash -RunAsync}
+            Start-Sleep 30
+
+            Get-VApp -Tag $tag | 
+                Get-VM -Name *PodRouter |
+                    Select -ExpandProperty name | 
+                        ForEach-Object { 
+                            $oct = $_.split("_")[0].substring(2)
+                            Invoke-VMScript -VM $_ -ScriptText "sed 's/172.16.254/172.16.$Oct/g' /cf/conf/config.xml > tempconf.xml; cp tempconf.xml /cf/conf/config.xml; rm /tmp/config.cache; /etc/rc.reload_all start" -GuestCredential $cred -ScriptType Bash -RunAsync
+                        }
             
     }
     
@@ -391,7 +395,7 @@ function New-PodRouter {
 
     # Creating the Router
     if (!$IsDevPod) {
-        $name = 'PodRouter'
+        $name = $Target + "_PodRouter"
         New-VM -Name $name `
             -ResourcePool $Target `
             -Datastore Ursula `
